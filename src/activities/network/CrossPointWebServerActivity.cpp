@@ -362,8 +362,8 @@ void CrossPointWebServerActivity::loop() {
       requestUpdate();
     }
 
-    // Animate RSS sync indicator while syncing
-    if (RssFeedSync::isSyncing()) {
+    // Animate RSS sync indicator while feed is active (connected or syncing)
+    if (RssFeedSync::isFeedActive()) {
       const unsigned long now = millis();
       static unsigned long lastSyncRender = 0;
       if (now - lastSyncRender > 600) {

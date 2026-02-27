@@ -120,9 +120,10 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     renderer.drawText(PULSR_10_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, httpLabel, /*black=*/true);
   }
 
-  // ── 5b. RSS sync indicator in second segment of left bar ───────────────────
-  // Lit white/pulsing while a feed sync is running; dim outline when idle. Label: "FEED"
-  {
+  // ── 5b. RSS feed indicator in second segment of left bar ────────────────────
+  // isFeedActive(): lit from WiFi connect until sync completes → then dark.
+  // isSyncing():    pulses white/grey while actively downloading.
+  if (RssFeedSync::isFeedActive()) {
     constexpr int IND_MARGIN = 8;
     constexpr int NUM_SEGS   = 4;
     const int zoneTop    = NAV_GAP + 4;
@@ -135,19 +136,19 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     constexpr int IND_R = 6;
 
     if (RssFeedSync::isSyncing()) {
-      // Pulse white/grey while syncing
+      // Pulse white/grey while actively downloading
       const Color syncColor = ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray);
       renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, syncColor);
     } else {
-      // Idle: dim outline only (draw border without fill)
-      renderer.drawRoundedRect(indX, indY, indW, indH, 1, IND_R, /*black=*/false);
+      // Connected, waiting to start — solid grey pill
+      renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, Color::LightGray);
     }
 
-    // Centered "FEED" label — white text (visible on both dark bg and lit pill)
+    // Centered "FEED" label — black text on grey/white pill
     const char* feedLabel = "FEED";
     const int lblW = renderer.getTextWidth(PULSR_10_FONT_ID, feedLabel);
     const int lblH = renderer.getTextHeight(PULSR_10_FONT_ID);
-    renderer.drawText(PULSR_10_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, feedLabel, /*black=*/false);
+    renderer.drawText(PULSR_10_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, feedLabel, /*black=*/true);
   }
 
   // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────

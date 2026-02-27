@@ -21,6 +21,7 @@ constexpr const char* NEWS_FILE = "/News.md";
 constexpr size_t NEWS_MAX_SIZE = 50 * 1024;
 
 TaskHandle_t syncTaskHandle = nullptr;
+bool s_feedActive = false;
 
 // ---------------------------------------------------------------------------
 // RSS item model
@@ -359,6 +360,7 @@ void syncTask(void*) {
     if (!HttpDownloader::fetchUrl(feedUrl, stream)) {
       LOG_ERR(TAG, "Failed to fetch feed: %s", feedUrl.c_str());
       syncTaskHandle = nullptr;
+      s_feedActive = false;
       vTaskDelete(nullptr);
       return;
     }
@@ -367,6 +369,7 @@ void syncTask(void*) {
   if (rssParser.error()) {
     LOG_ERR(TAG, "Failed to parse feed XML");
     syncTaskHandle = nullptr;
+    s_feedActive = false;
     vTaskDelete(nullptr);
     return;
   }
@@ -376,6 +379,7 @@ void syncTask(void*) {
 
   if (items.empty()) {
     syncTaskHandle = nullptr;
+    s_feedActive = false;
     vTaskDelete(nullptr);
     return;
   }
@@ -451,9 +455,11 @@ void startSync() {
   // Guard: only one sync at a time
   if (syncTaskHandle != nullptr) return;
 
+  s_feedActive = true;
   xTaskCreate(syncTask, "FeedSync", 8192, nullptr, 1, &syncTaskHandle);
 }
 
-bool isSyncing() { return syncTaskHandle != nullptr; }
+bool isSyncing()    { return syncTaskHandle != nullptr; }
+bool isFeedActive() { return s_feedActive; }
 
 }  // namespace RssFeedSync
