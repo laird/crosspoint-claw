@@ -1,3 +1,4 @@
+#include <vector>
 #include "UITheme.h"
 
 #include <GfxRenderer.h>
@@ -22,6 +23,7 @@ UITheme UITheme::instance;
 static bool s_networkConnected   = false;
 static bool s_networkTransferring = false;
 static bool s_httpServerActive    = false;
+static std::vector<std::string> s_receivedFiles;
 
 void UITheme::setNetworkStatus(bool connected, bool transferring) {
   s_networkConnected   = connected;
@@ -31,6 +33,10 @@ bool UITheme::isNetworkConnected()   { return s_networkConnected; }
 bool UITheme::isNetworkTransferring() { return s_networkTransferring; }
 void UITheme::setHttpServerActive(bool active) { s_httpServerActive = active; }
 bool UITheme::isHttpServerActive()    { return s_httpServerActive; }
+
+void UITheme::addReceivedFile(const std::string& name) { s_receivedFiles.push_back(name); }
+const std::vector<std::string>& UITheme::getReceivedFiles() { return s_receivedFiles; }
+void UITheme::clearReceivedFiles() { s_receivedFiles.clear(); }
 
 UITheme::UITheme() {
   auto themeType = static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme);

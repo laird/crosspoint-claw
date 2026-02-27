@@ -1,4 +1,5 @@
 #include "RssFeedSync.h"
+#include "components/UITheme.h"
 
 #include <HalStorage.h>
 #include <Logging.h>
@@ -406,6 +407,10 @@ void syncTask(void*) {
         continue;
       }
       LOG_DBG(TAG, "Downloaded %s → %s", type.c_str(), item.crosspointPath.c_str());
+      // Extract filename and add to shared received-files list for display
+      const std::string& path = item.crosspointPath;
+      const auto slash = path.rfind('/');
+      UITheme::addReceivedFile(slash == std::string::npos ? path : path.substr(slash + 1));
 
     } else if (type == "firmware") {
       if (SETTINGS.feedAllowFirmware == 0) {

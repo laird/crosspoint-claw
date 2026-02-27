@@ -52,6 +52,7 @@ void CrossPointWebServerActivity::onEnter() {
   connectedSSID.clear();
   lastHandleClientTime = 0;
   uploadedFiles.clear();
+  UITheme::clearReceivedFiles();
   requestUpdate();
 
   // Launch network mode selection subactivity
@@ -389,6 +390,7 @@ void CrossPointWebServerActivity::loop() {
       if (fileCompleted) {
         if (!uploadStatus.lastCompleteName.empty()) {
           uploadedFiles.push_back(uploadStatus.lastCompleteName);
+          UITheme::addReceivedFile(uploadStatus.lastCompleteName);
         }
         lastKnownCompleteAt = uploadStatus.lastCompleteAt;
         lastUploadInProgress = uploadStatus.inProgress;
@@ -544,7 +546,7 @@ void CrossPointWebServerActivity::renderServerRunning() const {
 
     // Completed uploads list (oldest first), left-justified in PULSR font
     const int pulsrLineH = renderer.getLineHeight(PULSR_12_FONT_ID);
-    for (const auto& name : uploadedFiles) {
+    for (const auto& name : UITheme::getReceivedFiles()) {
       renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), true);
       startY += pulsrLineH;
     }
@@ -576,7 +578,7 @@ void CrossPointWebServerActivity::renderServerRunning() const {
 
     // Completed uploads list (oldest first), left-justified in PULSR font
     const int pulsrLineH = renderer.getLineHeight(PULSR_12_FONT_ID);
-    for (const auto& name : uploadedFiles) {
+    for (const auto& name : UITheme::getReceivedFiles()) {
       renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), true);
       startY += pulsrLineH;
     }

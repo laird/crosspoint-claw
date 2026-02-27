@@ -1,3 +1,5 @@
+#include <vector>
+#include <string>
 #pragma once
 
 #include <functional>
@@ -31,6 +33,11 @@ class UITheme {
   static bool isNetworkTransferring();
   static void setHttpServerActive(bool active);
   static bool isHttpServerActive();
+
+  // Shared received-files list (HTTP uploads + feed downloads)
+  static void addReceivedFile(const std::string& name);
+  static const std::vector<std::string>& getReceivedFiles();
+  static void clearReceivedFiles();
 
  private:
   const ThemeMetrics* currentMetrics;
