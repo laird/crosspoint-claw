@@ -50,7 +50,8 @@ class CrossPointWebServerActivity final : public Activity {
   size_t lastUploadReceived = 0;
   unsigned long lastTransferUpdateTime = 0;
   unsigned long lastKnownCompleteAt = 0;
-  std::vector<std::string> uploadedFiles;  // Accumulated list of completed uploads (oldest first)
+  std::vector<std::string> uploadedFiles;
+  int lastReceivedFileCount = 0;  // tracks UITheme list for live feed updates  // Accumulated list of completed uploads (oldest first)
 
   void renderServerRunning() const;
 
