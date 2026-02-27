@@ -18,6 +18,7 @@
 #include "fontIds.h"
 #include "util/QrUtils.h"
 #include "network/RssFeedSync.h"
+#include "util/ScreenCapture.h"
 
 namespace {
 // AP Mode configuration
@@ -254,6 +255,9 @@ void CrossPointWebServerActivity::startWebServer() {
 
   // Create the web server instance
   webServer.reset(new CrossPointWebServer());
+  webServer->setScreenCaptureCallback([this]() -> bool {
+    return ScreenCapture::save(renderer, "web");
+  });
   webServer->begin();
 
   if (webServer->isRunning()) {

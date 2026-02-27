@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 
 #include <HalStorage.h>
 #include <NetworkUdp.h>
@@ -52,6 +53,7 @@ class CrossPointWebServer {
   ~CrossPointWebServer();
 
   // Start the web server (call after WiFi is connected)
+  void setScreenCaptureCallback(std::function<bool()> cb) { onScreenCapture = std::move(cb); }
   void begin();
 
   // Stop the web server
@@ -93,6 +95,8 @@ class CrossPointWebServer {
   // Request handlers
   void handleRoot() const;
   void handleNotFound() const;
+  std::function<bool()> onScreenCapture;
+  void handleScreenCap();
   void handleStatus() const;
   void handleFileList() const;
   void handleFileListData() const;
