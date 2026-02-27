@@ -94,6 +94,7 @@ class RssParser final : public Print {
       memcpy(buf, pos, toRead);
 
       if (XML_ParseBuffer(parser, static_cast<int>(toRead), 0) == XML_STATUS_ERROR) {
+        if (stopped) return length;  // intentional stop — not an error
         errorOccurred = true;
         LOG_ERR(TAG, "XML parse error line %lu: %s", XML_GetCurrentLineNumber(parser),
                 XML_ErrorString(XML_GetErrorCode(parser)));
@@ -108,14 +109,20 @@ class RssParser final : public Print {
   }
 
   void flush() override {
-    if (parser && !errorOccurred) {
+    if (parser && !errorOccurred && !stopped) {
       if (XML_Parse(parser, nullptr, 0, XML_TRUE) != XML_STATUS_OK) {
-        errorOccurred = true;
+        if (!stopped) errorOccurred = true;
       }
     }
   }
 
   bool error() const { return errorOccurred; }
+
+  // Abort parsing early (e.g. once we've seen all new items — no need to read the rest)
+  void stopParsing() {
+    if (parser) XML_StopParser(parser, XML_FALSE);
+    stopped = true;
+  }
 
   using ItemCallback = std::function<void(const RssItem&)>;
   void setItemCallback(ItemCallback cb) { itemCallback = std::move(cb); }
@@ -235,6 +242,7 @@ class RssParser final : public Print {
 
   XML_Parser parser = nullptr;
   bool errorOccurred = false;
+  bool stopped = false;
   bool inItem = false;
   Field activeField = Field::None;
   std::string currentText;
@@ -398,7 +406,8 @@ void syncTask(void*) {
     const uint32_t itemTime = parseRfc2822(item.pubDate);
     if (itemTime > 0 && itemTime <= lastSync) {
       reachedOldItems = true;
-      logToFile("INFO", "Reached already-processed items — stopping");
+      logToFile("INFO", "Reached already-processed items — stopping parse");
+      rssParser.stopParsing();  // abort XML parse early — no need to read rest of feed
       return;
     }
     if (item.guid.empty()) return;
@@ -407,6 +416,7 @@ void syncTask(void*) {
     { char _b[256]; snprintf(_b, sizeof(_b), "Item: type=%s guid=%s", type.c_str(), item.guid.c_str()); logToFile("INFO", _b); }
 
     if (type == "file" || type == "image") {
+      setState(RssFeedSync::State::DOWNLOADING);  // switch indicator as soon as first download starts
       if (item.enclosureUrl.empty() || item.crosspointPath.empty()) {
         LOG_DBG(TAG, "Skipping %s item '%s': missing enclosure/path", type.c_str(), item.guid.c_str());
         return;
