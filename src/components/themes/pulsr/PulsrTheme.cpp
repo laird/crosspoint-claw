@@ -93,9 +93,10 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     }
   }
 
-  // ── 5. Network connectivity indicator in top segment of left bar ─────────────
-  // Grey = connected (idle), white-blink = active transfer. Label: "HTTP"
-  if (UITheme::isNetworkConnected()) {
+  // ── 5. HTTP server indicator in top segment of left bar ──────────────────────
+  // Only shown when web server is actually running (file transfer / hotspot screens).
+  // Grey = idle, white-blink = active transfer. Label: "HTTP"
+  if (UITheme::isHttpServerActive()) {
     constexpr int IND_MARGIN = 8;
     constexpr int NUM_SEGS   = 4;
     const int zoneTop    = NAV_GAP + 4;

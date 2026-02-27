@@ -21,6 +21,7 @@ UITheme UITheme::instance;
 
 static bool s_networkConnected   = false;
 static bool s_networkTransferring = false;
+static bool s_httpServerActive    = false;
 
 void UITheme::setNetworkStatus(bool connected, bool transferring) {
   s_networkConnected   = connected;
@@ -28,6 +29,8 @@ void UITheme::setNetworkStatus(bool connected, bool transferring) {
 }
 bool UITheme::isNetworkConnected()   { return s_networkConnected; }
 bool UITheme::isNetworkTransferring() { return s_networkTransferring; }
+void UITheme::setHttpServerActive(bool active) { s_httpServerActive = active; }
+bool UITheme::isHttpServerActive()    { return s_httpServerActive; }
 
 UITheme::UITheme() {
   auto themeType = static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme);

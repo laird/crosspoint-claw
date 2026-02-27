@@ -70,6 +70,7 @@ void CrossPointWebServerActivity::onExit() {
   Activity::onExit();
 
   UITheme::setNetworkStatus(false, false);
+  UITheme::setHttpServerActive(false);
   LOG_DBG("WEBACT", "Free heap at onExit start: %d bytes", ESP.getFreeHeap());
 
   state = WebServerActivityState::SHUTTING_DOWN;
@@ -259,6 +260,7 @@ void CrossPointWebServerActivity::startWebServer() {
   if (webServer->isRunning()) {
     state = WebServerActivityState::SERVER_RUNNING;
     UITheme::setNetworkStatus(true, false);
+    UITheme::setHttpServerActive(true);
     LOG_DBG("WEBACT", "Web server started successfully");
 
     // Force an immediate render since we're transitioning from a subactivity
