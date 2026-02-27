@@ -84,13 +84,36 @@ bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent) {
     return false;
   }
 
-  const int written = http.writeToStream(&outContent);
-  http.end();
-  if (written < 0) {
-    LOG_ERR("HTTP", "writeToStream failed: %d for %s", written, url.c_str());
+  // Stream response into outContent using a fixed-size stack buffer.
+  // This ensures arbitrarily large responses never require heap allocation
+  // proportional to response size — we process each chunk as it arrives.
+  WiFiClient* stream = http.getStreamPtr();
+  if (!stream) {
+    LOG_ERR("HTTP", "No stream for %s", url.c_str());
+    http.end();
     return false;
   }
-  LOG_DBG("HTTP", "Fetch success (%d bytes): %s", written, url.c_str());
+  constexpr size_t CHUNK = 512;
+  uint8_t buf[CHUNK];
+  int total = 0;
+  const unsigned long fetchStart = millis();
+  constexpr unsigned long FETCH_TIMEOUT_MS = 30000;
+  while (http.connected()) {
+    if (millis() - fetchStart > FETCH_TIMEOUT_MS) {
+      LOG_ERR("HTTP", "Fetch timeout for %s", url.c_str());
+      http.end();
+      return false;
+    }
+    const size_t avail = stream->available();
+    if (avail == 0) { delay(1); continue; }
+    const size_t toRead = avail < CHUNK ? avail : CHUNK;
+    const size_t n = stream->readBytes(buf, toRead);
+    if (n == 0) break;
+    outContent.write(buf, n);
+    total += (int)n;
+  }
+  http.end();
+  LOG_DBG("HTTP", "Fetch complete (%d bytes): %s", total, url.c_str());
   return true;
 }
 
