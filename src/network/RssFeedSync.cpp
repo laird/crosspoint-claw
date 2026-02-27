@@ -7,7 +7,6 @@
 #include <expat.h>
 
 #include <cstring>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -17,7 +16,7 @@
 namespace {
 
 constexpr const char* TAG = "FEED";
-constexpr const char* SEEN_FILE    = "/.crosspoint/feed-seen.txt";
+constexpr const char* SYNC_TIME_FILE = "/.crosspoint/feed-sync-time.bin";  // stores uint32_t epoch of last processed item
 constexpr const char* LOG_FILE     = "/.crosspoint/feed-sync.log";
 constexpr const char* NEWS_FILE = "/News.md";
 constexpr size_t NEWS_MAX_SIZE = 50 * 1024;
@@ -275,39 +274,40 @@ static void logToFile(const char* level, const char* msg) {
   file.close();
 }
 
-std::set<std::string> loadSeenGuids() {
-  std::set<std::string> seen;
-  FsFile file;
-  if (!Storage.openFileForRead(TAG, SEEN_FILE, file)) return seen;
-
-  std::string line;
-  while (file.available()) {
-    char c;
-    file.read(reinterpret_cast<uint8_t*>(&c), 1);
-    if (c == '\n') {
-      if (!line.empty()) seen.insert(std::move(line));
-      line.clear();
-    } else {
-      line += c;
-    }
+// Parse RFC 2822 "Fri, 27 Feb 2026 18:00:11 +0000" → Unix epoch seconds. Returns 0 on failure.
+static uint32_t parseRfc2822(const std::string& s) {
+  static const char* months[] = {"Jan","Feb","Mar","Apr","May","Jun",
+                                  "Jul","Aug","Sep","Oct","Nov","Dec"};
+  int day=0, year=0, hour=0, min=0, sec=0, month=0;
+  char mon[4] = {};
+  if (sscanf(s.c_str(), "%*3s, %d %3s %d %d:%d:%d",
+             &day, mon, &year, &hour, &min, &sec) < 6) return 0;
+  for (int i = 0; i < 12; i++) {
+    if (strncasecmp(mon, months[i], 3) == 0) { month = i + 1; break; }
   }
-  if (!line.empty()) seen.insert(std::move(line));
-  file.close();
-  return seen;
+  if (month == 0 || year < 1970) return 0;
+  int y = year - 1970;
+  uint32_t days = (uint32_t)y * 365u + (uint32_t)((y + 1) / 4);
+  static const int md[] = {0,31,59,90,120,151,181,212,243,273,304,334};
+  days += (uint32_t)md[month - 1] + (uint32_t)(day - 1);
+  if (month > 2 && (year % 4 == 0)) days++;
+  return days * 86400u + (uint32_t)hour * 3600u + (uint32_t)min * 60u + (uint32_t)sec;
 }
 
-void appendSeenGuid(const std::string& guid) {
+static uint32_t loadLastSyncTime() {
   FsFile file;
-  // Open in append mode by writing to the end
-  if (!Storage.openFileForWrite(TAG, SEEN_FILE, file)) {
-    // File doesn't exist yet — first write will create it
-    Storage.mkdir("/.crosspoint");
-    if (!Storage.openFileForWrite(TAG, SEEN_FILE, file)) return;
-  }
-  // Seek to end to append
-  file.seekEnd(0);
-  file.write(reinterpret_cast<const uint8_t*>(guid.c_str()), guid.size());
-  file.write(reinterpret_cast<const uint8_t*>("\n"), 1);
+  if (!Storage.openFileForRead(TAG, SYNC_TIME_FILE, file)) return 0;
+  uint32_t t = 0;
+  file.read(reinterpret_cast<uint8_t*>(&t), sizeof(t));
+  file.close();
+  return t;
+}
+
+static void saveLastSyncTime(uint32_t t) {
+  Storage.mkdir("/.crosspoint");
+  FsFile file;
+  if (!Storage.openFileForWrite(TAG, SYNC_TIME_FILE, file)) return;
+  file.write(reinterpret_cast<const uint8_t*>(&t), sizeof(t));
   file.close();
 }
 
@@ -410,22 +410,25 @@ void syncTask(void*) {
     return;
   }
 
-  // 2. Load seen GUIDs
-  auto seen = loadSeenGuids();
+  // 2. Load last sync timestamp — skip anything older than this
+  const uint32_t lastSync = loadLastSyncTime();
+  uint32_t newestSeen = lastSync;
 
-  // Count unseen file/image items for progress display
+  // Count new file/image items for progress display (feed is newest-first; stop at lastSync)
   s_dlCurrent = 0;
   s_dlTotal = 0;
   for (const auto& item : items) {
-    if (item.guid.empty() || seen.count(item.guid)) continue;
+    const uint32_t t = parseRfc2822(item.pubDate);
+    if (t > 0 && t <= lastSync) break;  // reached already-processed items
     if (item.crosspointType == "file" || item.crosspointType == "image") s_dlTotal++;
   }
   if (s_dlTotal > 0) setState(RssFeedSync::State::DOWNLOADING);
 
-  // 3. Process each unseen item
+  // 3. Process each new item (stop when we reach items older than last sync)
   for (const auto& item : items) {
+    const uint32_t itemTime = parseRfc2822(item.pubDate);
+    if (itemTime > 0 && itemTime <= lastSync) break;  // done — rest already processed
     if (item.guid.empty()) continue;
-    if (seen.count(item.guid)) continue;
 
     const auto& type = item.crosspointType;
 
@@ -474,9 +477,13 @@ void syncTask(void*) {
       continue;
     }
 
-    appendSeenGuid(item.guid);
-    seen.insert(item.guid);
+    // Track newest processed item's timestamp
+    const uint32_t t = parseRfc2822(item.pubDate);
+    if (t > newestSeen) newestSeen = t;
   }
+
+  // Save the newest timestamp we successfully processed
+  if (newestSeen > lastSync) saveLastSyncTime(newestSeen);
 
   LOG_DBG(TAG, "Feed sync complete");
   { char _b[64]; snprintf(_b, sizeof(_b), "Sync complete — %d files downloaded", s_dlCurrent); logToFile("INFO", _b); }
