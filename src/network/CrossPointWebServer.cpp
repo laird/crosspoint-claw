@@ -134,7 +134,6 @@ void CrossPointWebServer::begin() {
   server->on("/files", HTTP_GET, [this] { handleFileList(); });
 
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
-  server->on("/api/screencap", HTTP_POST, [this] { handleScreenCap(); });
   server->on("/api/files", HTTP_GET, [this] { handleFileListData(); });
   server->on("/download", HTTP_GET, [this] { handleDownload(); });
 
@@ -353,14 +352,6 @@ void CrossPointWebServer::handleNotFound() const {
   String message = "404 Not Found\n\n";
   message += "URI: " + server->uri() + "\n";
   server->send(404, "text/plain", message);
-}
-
-void CrossPointWebServer::handleScreenCap() {
-  if (onScreenCapture && onScreenCapture()) {
-    server->send(200, "application/json", "{\"ok\":true,\"path\":\"/screencap/web.bmp\"}");
-  } else {
-    server->send(503, "application/json", "{\"ok\":false,\"error\":\"Capture failed\"}");
-  }
 }
 
 void CrossPointWebServer::handleStatus() const {
