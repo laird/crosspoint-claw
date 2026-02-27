@@ -133,11 +133,11 @@ EpdFont ui12RegularFont(&ubuntu_12_regular);
 EpdFont ui12BoldFont(&ubuntu_12_bold);
 EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
 
-EpdFont lcars10Font(&antonio_10_regular);
-EpdFontFamily lcars10FontFamily(&lcars10Font);
+EpdFont pulsr10Font(&antonio_10_regular);
+EpdFontFamily pulsr10FontFamily(&pulsr10Font);
 
-EpdFont lcars12Font(&antonio_12_regular);
-EpdFontFamily lcars12FontFamily(&lcars12Font);
+EpdFont pulsr12Font(&antonio_12_regular);
+EpdFontFamily pulsr12FontFamily(&pulsr12Font);
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
@@ -295,8 +295,8 @@ void setupDisplayAndFonts() {
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
-  renderer.insertFont(LCARS_10_FONT_ID, lcars10FontFamily);
-  renderer.insertFont(LCARS_12_FONT_ID, lcars12FontFamily);
+  renderer.insertFont(PULSR_10_FONT_ID, pulsr10FontFamily);
+  renderer.insertFont(PULSR_12_FONT_ID, pulsr12FontFamily);
   LOG_DBG("MAIN", "Fonts setup");
 }
 

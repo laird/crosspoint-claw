@@ -4,7 +4,7 @@
 
 class GfxRenderer;
 
-// LCARS theme – Star Trek LCARS-inspired UI for the CrossPoint Reader.
+
 // Layout (portrait, 480×800 device pixels):
 //   - Left bar:   x 0..88   (full height, rounded left corners)
 //   - Top bar:    y 0..44   (full width)
@@ -13,7 +13,7 @@ class GfxRenderer;
 //
 // Inner elbow curves sit at the junctions of the left bar with the top/bottom bars.
 
-namespace LcarsMetrics {
+namespace PulsrMetrics {
 // Frame geometry constants
 constexpr int LEFT_BAR_W   = 88;   // Left bar width (px)
 constexpr int TOP_BAR_H    = 44;   // Top and bottom bar height (px)
@@ -28,7 +28,7 @@ constexpr ThemeMetrics values = {
   .batteryBarHeight          = TOP_BAR_H,
   .headerHeight              = TOP_BAR_H,
   .verticalSpacing           = 8,
-  .contentSidePadding        = 98,  // LEFT_BAR_W(88) + 10 — pushes content past LCARS left bar
+  .contentSidePadding        = 98,  // LEFT_BAR_W(88) + 10 — pushes content past PULSR left bar
   .listRowHeight             = 36,
   .listWithSubtitleRowHeight = 56,
   .menuRowHeight             = 44,
@@ -52,9 +52,9 @@ constexpr ThemeMetrics values = {
   .keyboardCenteredText      = true,
 };
 // clang-format on
-}  // namespace LcarsMetrics
+}  // namespace PulsrMetrics
 
-class LcarsTheme : public BaseTheme {
+class PulsrTheme : public BaseTheme {
  public:
   void drawHeader(const GfxRenderer& renderer, Rect rect, const char* title,
                   const char* subtitle) const override;
@@ -90,7 +90,7 @@ class LcarsTheme : public BaseTheme {
                        bool isSelected) const override;
 
  private:
-  // Draws the full LCARS chrome: left bar, top bar, bottom bar, inner elbow curves, title and
+  // Draws the full PULSR chrome: left bar, top bar, bottom bar, inner elbow curves, title and
   // battery text in the top bar, and nav segment decorators in the left bar.
   void drawFrame(const GfxRenderer& renderer, const char* title) const;
 };

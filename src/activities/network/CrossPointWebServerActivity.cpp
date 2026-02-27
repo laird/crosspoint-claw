@@ -417,7 +417,7 @@ void CrossPointWebServerActivity::renderServerRunning() const {
   const auto uploadStatus = webServer ? webServer->getUploadStatus()
                                       : CrossPointWebServer::WsUploadStatus{};
 
-  // Sync network status so the LCARS indicator reflects the current transfer state.
+  // Sync network status so the PULSR indicator reflects the current transfer state.
   UITheme::setNetworkStatus(true, uploadStatus.inProgress);
 
   std::string headerTitle = isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER);
@@ -498,15 +498,15 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += drawCenteredWrapped(SMALL_FONT_ID, startY, ipUrl.c_str(), true);
     startY += metrics.verticalSpacing;
 
-    // Completed uploads list (oldest first), left-justified in LCARS font
-    const int lcarsLineH = renderer.getLineHeight(LCARS_12_FONT_ID);
+    // Completed uploads list (oldest first), left-justified in PULSR font
+    const int pulsrLineH = renderer.getLineHeight(PULSR_12_FONT_ID);
     for (const auto& name : uploadedFiles) {
-      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY, name.c_str(), true);
-      startY += lcarsLineH;
+      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), true);
+      startY += pulsrLineH;
     }
     // In-progress upload
     if (uploadStatus.inProgress && !uploadStatus.filename.empty()) {
-      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY,
+      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY,
                         (std::string("● ") + uploadStatus.filename).c_str(), true, EpdFontFamily::BOLD);
     }
   } else {
@@ -527,15 +527,15 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += drawCenteredWrapped(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
     startY += metrics.verticalSpacing;
 
-    // Completed uploads list (oldest first), left-justified in LCARS font
-    const int lcarsLineH = renderer.getLineHeight(LCARS_12_FONT_ID);
+    // Completed uploads list (oldest first), left-justified in PULSR font
+    const int pulsrLineH = renderer.getLineHeight(PULSR_12_FONT_ID);
     for (const auto& name : uploadedFiles) {
-      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY, name.c_str(), true);
-      startY += lcarsLineH;
+      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), true);
+      startY += pulsrLineH;
     }
     // In-progress upload
     if (uploadStatus.inProgress && !uploadStatus.filename.empty()) {
-      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY,
+      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY,
                         (std::string("● ") + uploadStatus.filename).c_str(), true, EpdFontFamily::BOLD);
     }
   }
