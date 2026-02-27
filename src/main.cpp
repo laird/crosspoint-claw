@@ -381,7 +381,40 @@ void setup() {
       snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
       renderer.drawCenteredText(SMALL_FONT_ID, barY + barH + 8, pctStr);
       renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 30, CROSSPOINT_VERSION);
-      renderer.displayBuffer();
+      renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+    };
+
+    auto logOtaError = [](const char* msg, size_t fileSize = 0, size_t written = 0) -> bool {
+      FsFile logFile;
+      if (!Storage.openFileForWrite("MAIN", "/ota_error.log", logFile)) {
+        LOG_ERR("MAIN", "OTA: could not open /ota_error.log for writing");
+        return false;
+      }
+      logFile.print("OTA error: ");
+      logFile.println(msg);
+      if (fileSize > 0) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "File size: %u, Written: %u", (unsigned)fileSize, (unsigned)written);
+        logFile.println(buf);
+      }
+      logFile.print("Free heap: ");
+      logFile.println(ESP.getFreeHeap());
+      logFile.print("Version: ");
+      logFile.println(CROSSPOINT_VERSION);
+      logFile.close();
+      return true;
+    };
+
+    auto showError = [&](const char* msg, size_t fileSize = 0, size_t written = 0) {
+      const bool logged = logOtaError(msg, fileSize, written);
+      renderer.clearScreen();
+      renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 30, "Firmware update failed", true, EpdFontFamily::BOLD);
+      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2, msg);
+      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 20, "firmware.bin NOT deleted");
+      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 38,
+                                logged ? "Error saved to /ota_error.log" : "Could not write /ota_error.log");
+      renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+      delay(15000);
     };
 
     drawUpdateScreen(0);
@@ -390,31 +423,51 @@ void setup() {
     if (firmwareFile) {
       const size_t fileSize = firmwareFile.size();
       LOG_INF("MAIN", "Firmware file size: %u bytes", fileSize);
-      if (Update.begin(fileSize, U_FLASH)) {
+
+      if (fileSize == 0) {
+        firmwareFile.close();
+        LOG_ERR("MAIN", "firmware.bin is empty (0 bytes) — aborting update");
+        showError("firmware.bin is empty (0 bytes)");
+      } else if (Update.begin(fileSize, U_FLASH)) {
         int lastPct = 0;
         Update.onProgress([&](size_t progress, size_t total) {
           if (total == 0) return;
-          const int pct = static_cast<int>((progress * 100) / total);
+          const int pct = std::min(100, static_cast<int>((progress * 100) / total));
           if (pct >= lastPct + 5) {
             lastPct = pct;
             drawUpdateScreen(pct);
           }
         });
         const size_t written = Update.writeStream(firmwareFile);
+        firmwareFile.close();
         if (written == fileSize && Update.end()) {
-          firmwareFile.close();
-          Storage.remove("/firmware.bin");
+          if (!Storage.remove("/firmware.bin")) {
+            LOG_INF("MAIN", "Firmware installed but failed to delete firmware.bin from SD card");
+          }
           LOG_INF("MAIN", "Firmware update complete, restarting...");
           ESP.restart();
         } else {
-          LOG_ERR("MAIN", "Firmware write failed: written=%u/%u, error: %s", written, fileSize, Update.errorString());
+          Update.abort();
+          char errMsg[80];
+          const char* updateErr = Update.errorString();
+          if (written != fileSize) {
+            snprintf(errMsg, sizeof(errMsg), "short write %u/%u: %s", (unsigned)written, (unsigned)fileSize, updateErr);
+          } else {
+            snprintf(errMsg, sizeof(errMsg), "finalize failed: %s", updateErr);
+          }
+          LOG_ERR("MAIN", "Firmware update failed: %s", errMsg);
+          showError(errMsg, fileSize, written);
         }
       } else {
-        LOG_ERR("MAIN", "Update.begin() failed: %s", Update.errorString());
+        firmwareFile.close();
+        char errMsg[80];
+        snprintf(errMsg, sizeof(errMsg), "begin failed: %s", Update.errorString());
+        LOG_ERR("MAIN", "Update.begin() failed: %s", errMsg);
+        showError(errMsg, fileSize);
       }
-      firmwareFile.close();
     } else {
       LOG_ERR("MAIN", "Failed to open /firmware.bin");
+      showError("Failed to open /firmware.bin");
     }
   }
 
