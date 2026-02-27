@@ -1,4 +1,4 @@
-#include "LcarsTheme.h"
+#include "PulsrTheme.h"
 
 #include <Bitmap.h>
 #include <GfxRenderer.h>
@@ -16,14 +16,14 @@
 #include "components/icons/cover.h"
 #include "fontIds.h"
 
-// File-scope alias so method bodies can reference LcarsMetrics concisely.
-namespace Lm = LcarsMetrics;
+// File-scope alias so method bodies can reference PulsrMetrics concisely.
+namespace Lm = PulsrMetrics;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal constants (all in device pixels, portrait 480×800)
 // ─────────────────────────────────────────────────────────────────────────────
 namespace {
-namespace M = LcarsMetrics;
+namespace M = PulsrMetrics;
 
 // Convenience aliases so the code below stays readable
 constexpr int LEFT_W   = M::LEFT_BAR_W;
@@ -51,7 +51,7 @@ constexpr int POPUP_MARGIN_X = 20;
 constexpr int POPUP_MARGIN_Y = 14;
 constexpr int POPUP_Y        = 200;  // y anchor for popup (within content area)
 
-// ─── Helper: shift a full-screen Rect into the LCARS content area ────────────
+// ─── Helper: shift a full-screen Rect into the PULSR content area ────────────
 // Activities pass Rect{0, y, pageWidth, h}; content must start at LEFT_W.
 inline Rect contentRect(const Rect& r) {
   return Rect(r.x + LEFT_W, r.y, r.width - LEFT_W, r.height);
@@ -60,9 +60,9 @@ inline Rect contentRect(const Rect& r) {
 }  // namespace
 
 // ─────────────────────────────────────────────────────────────────────────────
-// drawFrame  –  Paints the entire LCARS chrome onto a freshly cleared screen.
+// drawFrame  –  Paints the entire PULSR chrome onto a freshly cleared screen.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawFrame(const GfxRenderer& renderer, const char* title) const {
+void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const {
   const int W = renderer.getScreenWidth();
   const int H = renderer.getScreenHeight();
 
@@ -79,7 +79,7 @@ void LcarsTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
 
   // ── 4. Nav segment decorators in the left bar ───────────────────────────────
   // Horizontal white separator lines divide the straight zone into segments,
-  // giving the bar a classic LCARS multi-button appearance.
+  // giving the bar a classic PULSR multi-button appearance.
   {
     constexpr int NUM_SEGS  = 4;
     constexpr int LINE_INSET = 8;
@@ -112,16 +112,16 @@ void LcarsTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, indColor);
   }
 
-  // ── 6. Screen title in top bar (white, uppercase, LCARS-12) ────────────────
+  // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
   {
     const char* raw = (title != nullptr) ? title : "HOME";
     std::string upper(raw);
     for (char& c : upper) c = (c >= 'a' && c <= 'z') ? c - 32 : c;
     const int maxW  = W - LEFT_W - 12;
-    const auto lbl  = renderer.truncatedText(LCARS_12_FONT_ID, upper.c_str(), maxW);
-    const int  txtH = renderer.getTextHeight(LCARS_12_FONT_ID);
+    const auto lbl  = renderer.truncatedText(PULSR_12_FONT_ID, upper.c_str(), maxW);
+    const int  txtH = renderer.getTextHeight(PULSR_12_FONT_ID);
     const int  txtY = (TOP_H - txtH) / 2;
-    renderer.drawText(LCARS_12_FONT_ID, LEFT_W + 8, txtY, lbl.c_str(), /*black=*/false);
+    renderer.drawText(PULSR_12_FONT_ID, LEFT_W + 8, txtY, lbl.c_str(), /*black=*/false);
   }
 
   // ── 7. Battery percentage in left bar (white, bottom-aligned) ───────────────
@@ -142,9 +142,9 @@ void LcarsTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
 
 // ─────────────────────────────────────────────────────────────────────────────
 // drawHeader  –  Called once per render by each activity.
-// Draws the complete LCARS chrome regardless of the rect passed.
+// Draws the complete PULSR chrome regardless of the rect passed.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawHeader(const GfxRenderer& renderer, Rect /*rect*/, const char* title,
+void PulsrTheme::drawHeader(const GfxRenderer& renderer, Rect /*rect*/, const char* title,
                             const char* /*subtitle*/) const {
   drawFrame(renderer, title);
 }
@@ -152,21 +152,21 @@ void LcarsTheme::drawHeader(const GfxRenderer& renderer, Rect /*rect*/, const ch
 // ─────────────────────────────────────────────────────────────────────────────
 // drawSubHeader  –  Solid black band with white label text.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label,
+void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label,
                                 const char* rightLabel) const {
-  if (rect.height <= 0) return;  // tabBarHeight=0 in LCARS — nothing to draw
+  if (rect.height <= 0) return;  // tabBarHeight=0 in PULSR — nothing to draw
   const Rect cr = contentRect(rect);
 
   // Solid black background across the content width
   renderer.fillRect(cr.x, cr.y, cr.width, cr.height, /*black=*/true);
 
   // White label text, left-aligned with a small inset
-  const int textH = renderer.getTextHeight(LCARS_10_FONT_ID);
+  const int textH = renderer.getTextHeight(PULSR_10_FONT_ID);
   const int textY = cr.y + (cr.height - textH) / 2;
   if (label != nullptr) {
     const int maxW  = cr.width - LIST_PAD_X * 2 - (rightLabel != nullptr ? 80 : 0);
-    const auto trunc = renderer.truncatedText(LCARS_10_FONT_ID, label, maxW, EpdFontFamily::BOLD);
-    renderer.drawText(LCARS_10_FONT_ID, cr.x + LIST_PAD_X, textY, trunc.c_str(),
+    const auto trunc = renderer.truncatedText(PULSR_10_FONT_ID, label, maxW, EpdFontFamily::BOLD);
+    renderer.drawText(PULSR_10_FONT_ID, cr.x + LIST_PAD_X, textY, trunc.c_str(),
                       /*black=*/false, EpdFontFamily::BOLD);
   }
 
@@ -181,13 +181,13 @@ void LcarsTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const cha
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// drawTabBar  –  Draws tab pills directly inside the LCARS top bar.
+// drawTabBar  –  Draws tab pills directly inside the PULSR top bar.
 // The top bar is already filled black by drawFrame.
 // Selected tab: white filled pill, black text.
 // Others: white text only on the black bar.
 // Tab labels are abbreviated to 4 uppercase chars to fit the narrow bar.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
+void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
                              const std::vector<TabInfo>& tabs, bool /*selected*/) const {
   if (tabs.empty()) return;
 
@@ -214,18 +214,18 @@ void LcarsTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
     }
 
     const int tx = LEFT_W + i * tabW;
-    const int tw = renderer.getTextWidth(LCARS_10_FONT_ID, abbr);
-    const int th = renderer.getTextHeight(LCARS_10_FONT_ID);
+    const int tw = renderer.getTextWidth(PULSR_10_FONT_ID, abbr);
+    const int th = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int ty = (barH - th) / 2;
 
     if (tabs[i].selected) {
       // White filled pill with black text
       constexpr int PAD_X = 6, PAD_Y = 5;
       renderer.fillRect(tx + 2, PAD_Y, tabW - 4, barH - PAD_Y * 2, /*black=*/false);
-      renderer.drawText(LCARS_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, /*black=*/true);
+      renderer.drawText(PULSR_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, /*black=*/true);
     } else {
       // White text on black bar
-      renderer.drawText(LCARS_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, /*black=*/false);
+      renderer.drawText(PULSR_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, /*black=*/false);
     }
   }
 }
@@ -234,7 +234,7 @@ void LcarsTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
 // drawList  –  Paged list of items with optional subtitle / value / icon.
 // Selected row: light-gray fill + left-edge indicator bar.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
+void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
                            int selectedIndex,
                            const std::function<std::string(int)>& rowTitle,
                            const std::function<std::string(int)>& rowSubtitle,
@@ -278,7 +278,7 @@ void LcarsTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const bool isSel = (i == selectedIndex);
 
     // Selection highlight: light-gray row fill flush to content edge
-    // (no separate left indicator bar — the LCARS left bar already provides that anchor)
+    // (no separate left indicator bar — the PULSR left bar already provides that anchor)
     if (isSel) {
       renderer.fillRectDither(cr.x, itemY, contentW, rowH, Color::LightGray);
     }
@@ -292,19 +292,19 @@ void LcarsTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     std::string valueStr;
     if (rowValue != nullptr) {
       valueStr = rowValue(i);
-      valueStr = renderer.truncatedText(LCARS_10_FONT_ID, valueStr.c_str(), maxValueW);
-      valueW   = renderer.getTextWidth(LCARS_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X;
+      valueStr = renderer.truncatedText(PULSR_10_FONT_ID, valueStr.c_str(), maxValueW);
+      valueW   = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X;
     }
 
     // Title text
     const int titleX  = cr.x + SEL_BAR_W + LIST_PAD_X;
     const int titleMaxW = contentW - SEL_BAR_W - LIST_PAD_X * 2 - valueW;
-    const int titleH  = renderer.getTextHeight(LCARS_10_FONT_ID);
+    const int titleH  = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int titleY  = rowSubtitle != nullptr ? itemY + 5
                                                : itemY + (rowH - titleH) / 2;
 
-    const auto titleTrunc = renderer.truncatedText(LCARS_10_FONT_ID, rowTitle(i).c_str(), titleMaxW);
-    renderer.drawText(LCARS_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), /*black=*/true);
+    const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, rowTitle(i).c_str(), titleMaxW);
+    renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), /*black=*/true);
 
     // Subtitle text
     if (rowSubtitle != nullptr) {
@@ -314,15 +314,15 @@ void LcarsTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
 
     // Value text (draw right-aligned)
     if (!valueStr.empty()) {
-      const int vx = cr.x + contentW - renderer.getTextWidth(LCARS_10_FONT_ID, valueStr.c_str()) -
+      const int vx = cr.x + contentW - renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) -
                      LIST_PAD_X;
-      const int vy = itemY + (rowH - renderer.getTextHeight(LCARS_10_FONT_ID)) / 2;
+      const int vy = itemY + (rowH - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2;
       if (isSel && highlightValue) {
-        const int boxW = renderer.getTextWidth(LCARS_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X * 2;
+        const int boxW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X * 2;
         renderer.fillRect(vx - LIST_PAD_X, itemY, boxW, rowH, /*black=*/true);
-        renderer.drawText(LCARS_10_FONT_ID, vx, vy, valueStr.c_str(), /*black=*/false);
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), /*black=*/false);
       } else {
-        renderer.drawText(LCARS_10_FONT_ID, vx, vy, valueStr.c_str(), /*black=*/true);
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), /*black=*/true);
       }
     }
   }
@@ -333,7 +333,7 @@ void LcarsTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
 // The bottom bar is already filled black by drawFrame.  We draw white-outlined
 // boxes for non-empty labels and white text inside them.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2,
+void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2,
                                   const char* btn3, const char* btn4) const {
   const GfxRenderer::Orientation origOri = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
@@ -366,22 +366,22 @@ void LcarsTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
     upper[c] = '\0';
 
     const int x  = LEFT_W + i * btnW;
-    const int tw = renderer.getTextWidth(LCARS_10_FONT_ID, upper);
-    const int th = renderer.getTextHeight(LCARS_10_FONT_ID);
+    const int tw = renderer.getTextWidth(PULSR_10_FONT_ID, upper);
+    const int th = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int tx = x + (btnW - tw) / 2;
     const int ty = barY + (barH - th) / 2;
-    renderer.drawText(LCARS_10_FONT_ID, tx, ty, upper, /*black=*/false);
+    renderer.drawText(PULSR_10_FONT_ID, tx, ty, upper, /*black=*/false);
   }
 
   renderer.setOrientation(origOri);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// drawSideButtonHints  –  Not visible in LCARS (left bar serves this role).
+// drawSideButtonHints  –  Not visible in PULSR (left bar serves this role).
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawSideButtonHints(const GfxRenderer& /*renderer*/, const char* /*topBtn*/,
+void PulsrTheme::drawSideButtonHints(const GfxRenderer& /*renderer*/, const char* /*topBtn*/,
                                       const char* /*bottomBtn*/) const {
-  // Intentionally empty: LCARS left bar provides navigation context visually.
+  // Intentionally empty: PULSR left bar provides navigation context visually.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -389,7 +389,7 @@ void LcarsTheme::drawSideButtonHints(const GfxRenderer& /*renderer*/, const char
 // Selected tile: light-gray fill + black border + black text (consistent with list selection).
 // Others: outlined box, black text.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int buttonCount,
+void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int buttonCount,
                                  int selectedIndex,
                                  const std::function<std::string(int)>& buttonLabel,
                                  const std::function<UIIcon(int)>& /*rowIcon*/) const {
@@ -407,8 +407,8 @@ void LcarsTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
   const int startY   = H - TOP_H - gridH - 8;
   const int radius   = tileH / 2;  // fully rounded ends = pill shape
 
-  // LCARS label abbreviation: uppercase and strip generic qualifier words
-  auto lcarsLabel = [](const std::string& s) -> std::string {
+  // PULSR label abbreviation: uppercase and strip generic qualifier words
+  auto pulsrLabel = [](const std::string& s) -> std::string {
     std::string u = s;
     for (char& c : u) c = (c >= 'a' && c <= 'z') ? c - 32 : c;
     // Strip leading generic words
@@ -442,10 +442,10 @@ void LcarsTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
     // Always draw outline (selected and unselected)
     renderer.drawRoundedRect(tx, ty, tileW, tileH, /*lineWidth=*/1, radius, /*black=*/true);
 
-    const std::string labelStr = lcarsLabel(buttonLabel(i));
-    const int lw = renderer.getTextWidth(LCARS_10_FONT_ID, labelStr.c_str());
-    const int lh = renderer.getTextHeight(LCARS_10_FONT_ID);
-    renderer.drawText(LCARS_10_FONT_ID, tx + (tileW - lw) / 2, ty + (tileH - lh) / 2,
+    const std::string labelStr = pulsrLabel(buttonLabel(i));
+    const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, labelStr.c_str());
+    const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+    renderer.drawText(PULSR_10_FONT_ID, tx + (tileW - lw) / 2, ty + (tileH - lh) / 2,
                       labelStr.c_str(), /*black=*/true);
   }
 }
@@ -456,7 +456,7 @@ void LcarsTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
 // Covers are loaded from SD on the first render and saved to the frame buffer
 // via storeCoverBuffer so subsequent renders only redraw selection / text.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
+void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
                                       const std::vector<RecentBook>& recentBooks,
                                       const int selectorIndex, bool& coverRendered,
                                       bool& coverBufferStored, bool& /*bufferRestored*/,
@@ -467,9 +467,9 @@ void LcarsTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
   const int rowH     = cr.height / maxBooks;
 
   if (count == 0) {
-    const int msgY = cr.y + cr.height / 2 - renderer.getTextHeight(LCARS_10_FONT_ID);
-    renderer.drawCenteredText(LCARS_10_FONT_ID, msgY, tr(STR_NO_OPEN_BOOK), /*black=*/true);
-    renderer.drawCenteredText(LCARS_10_FONT_ID, msgY + renderer.getTextHeight(LCARS_10_FONT_ID) + 4,
+    const int msgY = cr.y + cr.height / 2 - renderer.getTextHeight(PULSR_10_FONT_ID);
+    renderer.drawCenteredText(PULSR_10_FONT_ID, msgY, tr(STR_NO_OPEN_BOOK), /*black=*/true);
+    renderer.drawCenteredText(PULSR_10_FONT_ID, msgY + renderer.getTextHeight(PULSR_10_FONT_ID) + 4,
                               tr(STR_START_READING), /*black=*/true);
     coverRendered = true;
     return;
@@ -493,7 +493,7 @@ void LcarsTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
       if (hasCover) {
         const std::string bmpPath = UITheme::getCoverThumbPath(book.coverBmpPath, coverH);
         FsFile file;
-        if (Storage.openFileForRead("LCARS_HOME", bmpPath, file)) {
+        if (Storage.openFileForRead("PULSR_HOME", bmpPath, file)) {
           Bitmap bitmap(file);
           if (bitmap.parseHeaders() == BmpReaderError::Ok) {
             renderer.drawBitmap(bitmap, thumbX, thumbY, COVER_W, coverH);
@@ -530,7 +530,7 @@ void LcarsTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     const bool isSel      = (i == selectorIndex);
 
     if (isSel) {
-      // Fill the full row width with grey — the LCARS left bar is already black
+      // Fill the full row width with grey — the PULSR left bar is already black
       // so no separate selection indicator is needed and the left edge stays flush.
       renderer.fillRectDither(cr.x, rowY, cr.width, topInset, Color::LightGray);
       renderer.fillRectDither(cr.x, coverEndY, cr.width, topInset, Color::LightGray);
@@ -542,13 +542,13 @@ void LcarsTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     // Title + author in the text column (right of cover)
     const int textX    = thumbEndX + LIST_PAD_X;
     const int textMaxW = cr.x + cr.width - textX - LIST_PAD_X;
-    const int titleH   = renderer.getTextHeight(LCARS_10_FONT_ID);
+    const int titleH   = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int authH    = renderer.getTextHeight(SMALL_FONT_ID);
     const int textY    = rowY + (rowH - titleH - 4 - authH) / 2;
 
     const auto titleTrunc =
-        renderer.truncatedText(LCARS_10_FONT_ID, book.title.c_str(), textMaxW, EpdFontFamily::BOLD);
-    renderer.drawText(LCARS_10_FONT_ID, textX, textY, titleTrunc.c_str(), /*black=*/true,
+        renderer.truncatedText(PULSR_10_FONT_ID, book.title.c_str(), textMaxW, EpdFontFamily::BOLD);
+    renderer.drawText(PULSR_10_FONT_ID, textX, textY, titleTrunc.c_str(), /*black=*/true,
                       EpdFontFamily::BOLD);
 
     if (!book.author.empty()) {
@@ -559,9 +559,9 @@ void LcarsTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// drawProgressBar  –  LCARS-style segmented progress bar (e.g. downloads).
+// drawProgressBar  –  PULSR-style segmented progress bar (e.g. downloads).
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current,
+void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current,
                                   size_t total) const {
   if (total == 0) return;
 
@@ -585,14 +585,14 @@ void LcarsTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t 
   // Percentage label centered below bar
   char pctBuf[8];
   snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
-  renderer.drawCenteredText(LCARS_10_FONT_ID, cr.y + cr.height + 10, pctBuf);
+  renderer.drawCenteredText(PULSR_10_FONT_ID, cr.y + cr.height + 10, pctBuf);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // drawReadingProgressBar  –  Thin progress strip along the top of the content
 // area (visible above the book text, below the black top bar).
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawReadingProgressBar(const GfxRenderer& renderer,
+void PulsrTheme::drawReadingProgressBar(const GfxRenderer& renderer,
                                          const size_t bookProgress) const {
   const int contentW = renderer.getScreenWidth() - LEFT_W;
   const int barH     = Lm::values.bookProgressBarHeight;
@@ -606,7 +606,7 @@ void LcarsTheme::drawReadingProgressBar(const GfxRenderer& renderer,
 // ─────────────────────────────────────────────────────────────────────────────
 // drawPopup  –  Centered modal message box inside the content area.
 // ─────────────────────────────────────────────────────────────────────────────
-Rect LcarsTheme::drawPopup(const GfxRenderer& renderer, const char* message) const {
+Rect PulsrTheme::drawPopup(const GfxRenderer& renderer, const char* message) const {
   const int W       = renderer.getScreenWidth();
   const int textW   = renderer.getTextWidth(UI_12_FONT_ID, message);
   const int textH   = renderer.getLineHeight(UI_12_FONT_ID);
@@ -631,7 +631,7 @@ Rect LcarsTheme::drawPopup(const GfxRenderer& renderer, const char* message) con
 // ─────────────────────────────────────────────────────────────────────────────
 // fillPopupProgress  –  Fills an expanding progress line inside a popup.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layout,
+void PulsrTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layout,
                                     int progress) const {
   constexpr int barH = 4;
   const int barW     = layout.width - POPUP_MARGIN_X * 2;
@@ -646,7 +646,7 @@ void LcarsTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layo
 // ─────────────────────────────────────────────────────────────────────────────
 // drawTextField  –  Underline decoration for an active text input.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawTextField(const GfxRenderer& renderer, Rect rect, int textWidth) const {
+void PulsrTheme::drawTextField(const GfxRenderer& renderer, Rect rect, int textWidth) const {
   constexpr int PAD    = 8;
   const int lineW      = textWidth + PAD * 2;
   const int lineY      = rect.y + rect.height + renderer.getLineHeight(UI_12_FONT_ID) +
@@ -658,7 +658,7 @@ void LcarsTheme::drawTextField(const GfxRenderer& renderer, Rect rect, int textW
 // ─────────────────────────────────────────────────────────────────────────────
 // drawKeyboardKey  –  Single keyboard key, filled when selected.
 // ─────────────────────────────────────────────────────────────────────────────
-void LcarsTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label,
+void PulsrTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label,
                                   bool isSelected) const {
   constexpr int R = 3;
   if (isSelected) {
