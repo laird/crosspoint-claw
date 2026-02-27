@@ -517,7 +517,7 @@ void startSync() {
 
   s_state = RssFeedSync::State::FETCHING;  // set immediately so indicator lights before task starts
   s_dlCurrent = 0; s_dlTotal = 0;
-  xTaskCreate(syncTask, "FeedSync", 8192, nullptr, 1, &syncTaskHandle);
+  xTaskCreate(syncTask, "FeedSync", 16384, nullptr, 1, &syncTaskHandle);  // 16KB: HTTPS+Expat+std::string need headroom
 }
 
 State getState()    { return s_state; }
