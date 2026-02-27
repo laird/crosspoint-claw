@@ -354,6 +354,12 @@ void CrossPointWebServerActivity::loop() {
       return;
     }
 
+    // Confirm button = manually trigger RSS feed sync
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      RssFeedSync::startSync();
+      requestUpdate();
+    }
+
     // Monitor upload status and trigger display refresh on file close only
     // Rate-limited to avoid excessive e-ink refreshes
     if (webServer) {
@@ -562,6 +568,6 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     }
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_EXIT), "", "", "");
+  const auto labels = mappedInput.mapLabels(tr(STR_EXIT), tr(STR_CHECK_FEED), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 }
