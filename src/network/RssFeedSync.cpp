@@ -375,12 +375,16 @@ void syncTask(void*) {
   setState(RssFeedSync::State::FETCHING);
 
   const std::string feedUrl = SETTINGS.feedUrl;
+  { char _b[320]; snprintf(_b, sizeof(_b), "Feed URL: %s", feedUrl.c_str()); logToFile("INFO", _b); }
 
   // 2. Load last sync timestamp — skip items older than this
   const uint32_t lastSync = loadLastSyncTime();
+  { char _b[64]; snprintf(_b, sizeof(_b), "Last sync timestamp: %lu", (unsigned long)lastSync); logToFile("INFO", _b); }
   uint32_t oldestSuccess = 0;
   s_dlCurrent = 0;
   s_dlTotal = 0;
+
+  { char _b[64]; snprintf(_b, sizeof(_b), "Free heap before fetch: %lu bytes", (unsigned long)ESP.getFreeHeap()); logToFile("INFO", _b); }
 
   // 1+3. Fetch AND process items simultaneously via SAX callback.
   //      Items are processed as each </item> is parsed — no vector accumulation.
@@ -389,16 +393,18 @@ void syncTask(void*) {
   bool reachedOldItems = false;
   RssParser rssParser;
   rssParser.setItemCallback([&](const RssItem& item) {
-    if (reachedOldItems) return;  // already past the watermark
+    if (reachedOldItems) return;
 
     const uint32_t itemTime = parseRfc2822(item.pubDate);
     if (itemTime > 0 && itemTime <= lastSync) {
-      reachedOldItems = true;  // stop processing further items
+      reachedOldItems = true;
+      logToFile("INFO", "Reached already-processed items — stopping");
       return;
     }
     if (item.guid.empty()) return;
 
     const auto& type = item.crosspointType;
+    { char _b[256]; snprintf(_b, sizeof(_b), "Item: type=%s guid=%s", type.c_str(), item.guid.c_str()); logToFile("INFO", _b); }
 
     if (type == "file" || type == "image") {
       if (item.enclosureUrl.empty() || item.crosspointPath.empty()) {
@@ -413,7 +419,7 @@ void syncTask(void*) {
         return;
       }
       s_dlCurrent++;
-      LOG_DBG(TAG, "Downloaded %s → %s [%d/%d]", type.c_str(), item.crosspointPath.c_str(), s_dlCurrent, s_dlTotal);
+      { char _b[256]; snprintf(_b, sizeof(_b), "Downloaded [%d]: %s (heap: %lu)", s_dlCurrent, item.crosspointPath.c_str(), (unsigned long)ESP.getFreeHeap()); logToFile("INFO", _b); }
       // Extract filename and add to shared received-files list for display
       const std::string& path = item.crosspointPath;
       const auto slash = path.rfind('/');
@@ -454,6 +460,7 @@ void syncTask(void*) {
   // Now fetch — the callback fires for each item as it is parsed during the fetch.
   {
     RssParserStream stream(rssParser);
+    logToFile("INFO", "Starting feed fetch...");
     setState(RssFeedSync::State::PARSING);
     if (!HttpDownloader::fetchUrl(feedUrl, stream)) {
       LOG_ERR(TAG, "Failed to fetch feed: %s", feedUrl.c_str());
@@ -464,6 +471,8 @@ void syncTask(void*) {
       return;
     }
   }  // stream destroyed here → parser.flush() → any final item callback fires
+  logToFile("INFO", "Feed fetch complete");
+  { char _b[64]; snprintf(_b, sizeof(_b), "Free heap after fetch: %lu bytes", (unsigned long)ESP.getFreeHeap()); logToFile("INFO", _b); }
 
   if (rssParser.error()) {
     LOG_ERR(TAG, "XML parse error in feed");

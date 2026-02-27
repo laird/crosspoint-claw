@@ -265,7 +265,8 @@ void WifiSelectionActivity::checkConnectionStatus() {
       LOG_DBG("WIFI",
               "Connected with saved/open credentials, "
               "completing immediately");
-      RssFeedSync::startSync();  // kick off feed sync on WiFi connect
+      LOG_DBG("WIFI", "WiFi connected to %s — starting feed sync", selectedSSID.c_str());
+      RssFeedSync::startSync();
       onComplete(true);
     }
     return;
@@ -335,6 +336,7 @@ void WifiSelectionActivity::loop() {
       onComplete(true);
     } else if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       // Skip saving, complete anyway
+      LOG_DBG("WIFI", "WiFi connected (no save) — starting feed sync");
       RssFeedSync::startSync();
       onComplete(true);
     }
