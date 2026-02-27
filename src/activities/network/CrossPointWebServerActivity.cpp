@@ -58,6 +58,7 @@ void CrossPointWebServerActivity::onEnter() {
 void CrossPointWebServerActivity::onExit() {
   ActivityWithSubactivity::onExit();
 
+  UITheme::setNetworkStatus(false, false);
   LOG_DBG("WEBACT", "Free heap at onExit start: %d bytes", ESP.getFreeHeap());
 
   state = WebServerActivityState::SHUTTING_DOWN;
@@ -233,6 +234,7 @@ void CrossPointWebServerActivity::startWebServer() {
 
   if (webServer->isRunning()) {
     state = WebServerActivityState::SERVER_RUNNING;
+    UITheme::setNetworkStatus(true, false);
     LOG_DBG("WEBACT", "Web server started successfully");
 
     // Force an immediate render since we're transitioning from a subactivity
@@ -415,6 +417,9 @@ void CrossPointWebServerActivity::renderServerRunning() const {
   const auto uploadStatus = webServer ? webServer->getUploadStatus()
                                       : CrossPointWebServer::WsUploadStatus{};
 
+  // Sync network status so the LCARS indicator reflects the current transfer state.
+  UITheme::setNetworkStatus(true, uploadStatus.inProgress);
+
   std::string headerTitle = isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER);
   if (uploadStatus.inProgress) {
     headerTitle = "● Receiving File...";
@@ -427,77 +432,110 @@ void CrossPointWebServerActivity::renderServerRunning() const {
 
   int startY = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing * 2;
   int height10 = renderer.getLineHeight(UI_10_FONT_ID);
+  // Center QR codes and text within the content area (to the right of any left bar)
+  const int contentLeft = metrics.contentSidePadding;
+  const int contentW    = pageWidth - contentLeft;
+  const int qrX = contentLeft + (contentW - QR_CODE_WIDTH) / 2;
+
+  // Draw centered text within the content area, wrapping to two lines if needed.
+  // Returns the total pixel height consumed (one or two lines).
+  auto drawCenteredWrapped = [&](int fontId, int y, const char* text, bool black,
+                                 EpdFontFamily::Style style = EpdFontFamily::REGULAR) -> int {
+    const int lineH = renderer.getTextHeight(fontId);
+    const int fullW = renderer.getTextWidth(fontId, text, style);
+    if (fullW <= contentW) {
+      renderer.drawText(fontId, contentLeft + (contentW - fullW) / 2, y, text, black, style);
+      return lineH;
+    }
+    // Find the last word boundary where the first line still fits.
+    std::string s(text);
+    size_t breakAt = 0;
+    size_t pos = 0;
+    while ((pos = s.find(' ', pos)) != std::string::npos) {
+      const int w = renderer.getTextWidth(fontId, s.substr(0, pos).c_str(), style);
+      if (w <= contentW) breakAt = pos;
+      pos++;
+    }
+    if (breakAt == 0) breakAt = s.size();  // one word too long — draw as-is
+    const std::string line1 = s.substr(0, breakAt);
+    const std::string line2 = (breakAt < s.size()) ? s.substr(breakAt + 1) : "";
+    const int w1 = renderer.getTextWidth(fontId, line1.c_str(), style);
+    renderer.drawText(fontId, contentLeft + (contentW - w1) / 2, y, line1.c_str(), black, style);
+    if (!line2.empty()) {
+      const int w2 = renderer.getTextWidth(fontId, line2.c_str(), style);
+      renderer.drawText(fontId, contentLeft + (contentW - w2) / 2, y + lineH + 2, line2.c_str(), black, style);
+      return lineH * 2 + 2;
+    }
+    return lineH;
+  };
+
   if (isApMode) {
-    // AP mode display
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, startY, tr(STR_CONNECT_WIFI_HINT), true,
-                      EpdFontFamily::BOLD);
-    startY += height10 + metrics.verticalSpacing * 2;
+    // AP mode: two QR codes stacked vertically, text centered below each.
 
-    // Show QR code for Wifi
+    // ── Section 1: WiFi connection ───────────────────────────────────────────
+    startY += drawCenteredWrapped(UI_10_FONT_ID, startY, tr(STR_CONNECT_WIFI_HINT), true, EpdFontFamily::BOLD);
+    startY += metrics.verticalSpacing;
+
     const std::string wifiConfig = std::string("WIFI:S:") + connectedSSID + ";;";
-    drawQRCode(renderer, metrics.contentSidePadding, startY, wifiConfig);
+    drawQRCode(renderer, qrX, startY, wifiConfig);
+    startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
-    // Show network name
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 80,
-                      connectedSSID.c_str());
+    startY += drawCenteredWrapped(UI_10_FONT_ID, startY, connectedSSID.c_str(), true);
+    startY += metrics.verticalSpacing * 3;
 
-    startY += QR_CODE_HEIGHT + 2 * metrics.verticalSpacing;
-
-    // Show primary URL (hostname)
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, startY, tr(STR_OPEN_URL_HINT), true,
-                      EpdFontFamily::BOLD);
-    startY += height10 + metrics.verticalSpacing * 2;
+    // ── Section 2: Web URL ───────────────────────────────────────────────────
+    startY += drawCenteredWrapped(UI_10_FONT_ID, startY, tr(STR_OPEN_URL_HINT), true, EpdFontFamily::BOLD);
+    startY += metrics.verticalSpacing;
 
     std::string hostnameUrl = std::string("http://") + AP_HOSTNAME + ".local/";
     std::string ipUrl = tr(STR_OR_HTTP_PREFIX) + connectedIP + "/";
 
-    // Show QR code for URL
-    drawQRCode(renderer, metrics.contentSidePadding, startY, hostnameUrl);
+    drawQRCode(renderer, qrX, startY, hostnameUrl);
+    startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
-    // Show IP address as fallback
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 80,
-                      hostnameUrl.c_str());
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding + QR_CODE_WIDTH + metrics.verticalSpacing, startY + 100,
-                      ipUrl.c_str());
+    // Transfer status below URL QR
+    if (uploadStatus.inProgress) {
+      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
+                                    (std::string("● ") + uploadStatus.filename).c_str(), true,
+                                    EpdFontFamily::BOLD);
+      startY += metrics.verticalSpacing;
+    } else if (uploadStatus.lastCompleteAt > 0) {
+      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
+                                    (std::string("✓ ") + uploadStatus.lastCompleteName).c_str(), true);
+      startY += metrics.verticalSpacing;
+    }
+
+    startY += drawCenteredWrapped(UI_10_FONT_ID, startY, hostnameUrl.c_str(), true);
+    startY += metrics.verticalSpacing;
+    drawCenteredWrapped(SMALL_FONT_ID, startY, ipUrl.c_str(), true);
   } else {
     startY += metrics.verticalSpacing * 2;
 
-    // STA mode display (original behavior)
-    // std::string ipInfo = "IP Address: " + connectedIP;
-    renderer.drawCenteredText(UI_10_FONT_ID, startY, tr(STR_OPEN_URL_HINT), true, EpdFontFamily::BOLD);
-    startY += height10;
-    renderer.drawCenteredText(UI_10_FONT_ID, startY, tr(STR_SCAN_QR_HINT), true, EpdFontFamily::BOLD);
-    startY += height10 + metrics.verticalSpacing * 2;
+    // STA mode: one QR code centered in the content area.
+    startY += drawCenteredWrapped(UI_10_FONT_ID, startY, tr(STR_OPEN_URL_HINT), true, EpdFontFamily::BOLD);
+    startY += drawCenteredWrapped(UI_10_FONT_ID, startY, tr(STR_SCAN_QR_HINT), true, EpdFontFamily::BOLD);
+    startY += metrics.verticalSpacing * 2;
 
-    // Show QR code for URL
     std::string webInfo = "http://" + connectedIP + "/";
-    drawQRCode(renderer, (pageWidth - QR_CODE_WIDTH) / 2, startY, webInfo);
-    startY += QR_CODE_HEIGHT + metrics.verticalSpacing * 2;
+    drawQRCode(renderer, qrX, startY, webInfo);
+    startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
-    // Show web server URL prominently
-    renderer.drawCenteredText(UI_10_FONT_ID, startY, webInfo.c_str(), true);
-    startY += height10 + 5;
+    // Transfer status below QR
+    if (uploadStatus.inProgress) {
+      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
+                                    (std::string("● ") + uploadStatus.filename).c_str(), true,
+                                    EpdFontFamily::BOLD);
+      startY += metrics.verticalSpacing;
+    } else if (uploadStatus.lastCompleteAt > 0) {
+      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
+                                    (std::string("✓ ") + uploadStatus.lastCompleteName).c_str(), true);
+      startY += metrics.verticalSpacing;
+    }
 
-    // Also show hostname URL
+    startY += drawCenteredWrapped(UI_10_FONT_ID, startY, webInfo.c_str(), true);
+    startY += 5;
     std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/";
-    renderer.drawCenteredText(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
-  }
-
-  // --- Transfer status bar (shown at bottom, above button hints) ---
-  const int hintAreaHeight = metrics.buttonHintsHeight + metrics.verticalSpacing;
-  const int statusBarH = renderer.getLineHeight(SMALL_FONT_ID) + metrics.verticalSpacing * 2;
-  const int statusBarY = pageHeight - hintAreaHeight - statusBarH - metrics.verticalSpacing;
-
-  if (uploadStatus.inProgress) {
-    char label[80];
-    snprintf(label, sizeof(label), "%.70s", uploadStatus.filename.c_str());
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, statusBarY, label, true);
-  } else if (uploadStatus.lastCompleteAt > 0) {
-    char label[80];
-    snprintf(label, sizeof(label), "✓ %.68s", uploadStatus.lastCompleteName.c_str());
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, statusBarY, label, true);
-  } else {
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, statusBarY, "Ready", true);
+    drawCenteredWrapped(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_EXIT), "", "", "");

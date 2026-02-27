@@ -23,6 +23,11 @@ class UITheme {
   static std::string getCoverThumbPath(std::string coverBmpPath, int coverHeight);
   static UIIcon getFileIcon(std::string filename);
 
+  // Network connectivity status — used by themes to draw indicators (e.g. LCARS left-bar segment).
+  static void setNetworkStatus(bool connected, bool transferring);
+  static bool isNetworkConnected();
+  static bool isNetworkTransferring();
+
  private:
   const ThemeMetrics* currentMetrics;
   std::unique_ptr<BaseTheme> currentTheme;
