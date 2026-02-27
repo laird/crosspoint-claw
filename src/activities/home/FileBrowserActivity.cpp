@@ -251,7 +251,7 @@ void FileBrowserActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
-  std::string folderName = (basepath == "/") ? tr(STR_SD_CARD) : basepath.substr(basepath.rfind('/') + 1);
+  std::string folderName = (basepath == "/") ? "Browse" : basepath.substr(basepath.rfind('/') + 1);
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName.c_str());
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;

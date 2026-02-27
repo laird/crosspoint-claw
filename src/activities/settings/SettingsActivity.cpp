@@ -88,28 +88,28 @@ void SettingsActivity::loop() {
   }
 
   // Up/Down navigate the settings list
-  buttonNavigator.onNextRelease([this] {
+  if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
     selectedSettingIndex = ButtonNavigator::nextIndex(selectedSettingIndex, settingsCount);
     requestUpdate();
-  });
+  }
 
-  buttonNavigator.onPreviousRelease([this] {
+  if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
     selectedSettingIndex = ButtonNavigator::previousIndex(selectedSettingIndex, settingsCount);
     requestUpdate();
-  });
+  }
 
   // Left/Right switch tabs
-  buttonNavigator.onNextContinuous([this, &hasChangedCategory] {
+  if (mappedInput.wasPressed(MappedInputManager::Button::Right)) {
     hasChangedCategory = true;
     selectedCategoryIndex = ButtonNavigator::nextIndex(selectedCategoryIndex, categoryCount);
     requestUpdate();
-  });
+  }
 
-  buttonNavigator.onPreviousContinuous([this, &hasChangedCategory] {
+  if (mappedInput.wasPressed(MappedInputManager::Button::Left)) {
     hasChangedCategory = true;
     selectedCategoryIndex = ButtonNavigator::previousIndex(selectedCategoryIndex, categoryCount);
     requestUpdate();
-  });
+  }
 
   if (hasChangedCategory) {
     selectedSettingIndex = 0;

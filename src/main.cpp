@@ -21,6 +21,19 @@
 #include "RecentBooksStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
+#include "activities/boot_sleep/BootActivity.h"
+#include "activities/boot_sleep/SleepActivity.h"
+#include "activities/browser/OpdsBookBrowserActivity.h"
+#include "activities/home/HomeActivity.h"
+#include "activities/home/MyLibraryActivity.h"
+#include "activities/home/RecentBooksActivity.h"
+#include "activities/network/CrossPointWebServerActivity.h"
+#include "activities/network/NetworkModeSelectionActivity.h"
+#include "activities/network/WifiSelectionActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
+#include "activities/reader/ReaderActivity.h"
+#include "activities/settings/SettingsActivity.h"
+#include "activities/util/FullScreenMessageActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
@@ -397,6 +410,21 @@ void runScreenshotTour() {
   exitActivity();
   enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
   captureStep("recents");
+
+  exitActivity();
+  enterNewActivity(new NetworkModeSelectionActivity(renderer, mappedInputManager,
+                                                    [](NetworkMode) {}, [] {}));
+  captureStep("network_mode");
+
+  exitActivity();
+  // false = no auto-connect, so we stay in SCANNING state for the capture
+  enterNewActivity(new WifiSelectionActivity(renderer, mappedInputManager, [](bool) {}, false));
+  captureStep("wifi_scan");
+
+  exitActivity();
+  enterNewActivity(new KeyboardEntryActivity(renderer, mappedInputManager, "WIFI PASSWORD", "", 64,
+                                             true, nullptr, nullptr));
+  captureStep("keyboard");
 
   onGoHome();
   delay(300);
