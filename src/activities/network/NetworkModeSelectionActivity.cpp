@@ -25,6 +25,13 @@ void NetworkModeSelectionActivity::onEnter() {
 void NetworkModeSelectionActivity::onExit() { Activity::onExit(); }
 
 void NetworkModeSelectionActivity::loop() {
+  // Redraw whenever feed sync delivers a new file
+  const int currentCount = static_cast<int>(UITheme::getReceivedFiles().size());
+  if (currentCount != lastReceivedCount) {
+    lastReceivedCount = currentCount;
+    requestUpdate();
+  }
+
   // Handle back button - cancel
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     onCancel();
