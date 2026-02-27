@@ -108,125 +108,60 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       renderer.drawLine(LINE_INSET, lineY, LEFT_W - LINE_INSET, lineY, /*black=*/false);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Seg 0: Power segment — PWR pill always present; HTTP + FEED when active.
-    //        Pills stacked top-to-bottom with PILL_GAP between them.
-    // ─────────────────────────────────────────────────────────────────────────
-    {
-      const int seg0Top = zoneTop;
+  // ── 5. Network connectivity indicator in top segment of left bar ─────────────
+  // Grey = connected (idle), white-blink = active transfer. Label: "HTTP"
+  if (UITheme::isNetworkConnected()) {
+    constexpr int IND_MARGIN = 8;
+    constexpr int NUM_SEGS   = 4;
+    const int zoneTop    = NAV_GAP + 4;
+    const int zoneBottom = H - NAV_GAP - 4;
+    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
+    const int indX = IND_MARGIN;
+    const int indY = zoneTop + IND_MARGIN;
+    const int indW = LEFT_W - IND_MARGIN * 2;
+    const int indH = segH - IND_MARGIN * 2;
+    constexpr int IND_R = 6;
 
-      // Helper lambda: draw one pill at the given slot index (0=top)
-      // Returns the y of the next slot.
-      int pillY = seg0Top + SEG_MARGIN;
+    const Color indColor = UITheme::isNetworkTransferring()
+                               ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
+                               : Color::LightGray;
+    renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, indColor);
 
-      // PWR pill — always shown, grey background, black "PWR" label
-      renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, Color::LightGray);
-      {
-        const char* lbl = "PWR";
-        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
-        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
-      }
-      pillY += pillH + PILL_GAP;
+    // Centered "HTTP" label — black text on grey pill
+    const char* httpLabel = "HTTP";
+    const int lblW = renderer.getTextWidth(SMALL_FONT_ID, httpLabel);
+    const int lblH = renderer.getTextHeight(SMALL_FONT_ID);
+    renderer.drawText(SMALL_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, httpLabel, /*black=*/true);
+  }
 
-      // HTTP pill — only when web server is active
-      if (UITheme::isHttpServerActive()) {
-        const Color httpColor = UITheme::isNetworkTransferring()
-            ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-            : Color::LightGray;
-        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
-        const char* lbl = "HTTP";
-        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
-        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
-      }
-      pillY += pillH + PILL_GAP;
+  // ── 5b. RSS sync indicator in second segment of left bar ───────────────────
+  // Lit white/pulsing while a feed sync is running; dim outline when idle. Label: "FEED"
+  {
+    constexpr int IND_MARGIN = 8;
+    constexpr int NUM_SEGS   = 4;
+    const int zoneTop    = NAV_GAP + 4;
+    const int zoneBottom = H - NAV_GAP - 4;
+    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
+    const int indX = IND_MARGIN;
+    const int indY = zoneTop + segH + IND_MARGIN;
+    const int indW = LEFT_W - IND_MARGIN * 2;
+    const int indH = segH - IND_MARGIN * 2;
+    constexpr int IND_R = 6;
 
-      // FEED pill — lit while feed is active (syncing or waiting), dark outline when done
-      if (RssFeedSync::isFeedActive()) {
-        const Color feedColor = RssFeedSync::isSyncing()
-            ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-            : Color::LightGray;
-        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
-        const char* lbl = "FEED";
-        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
-        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
-      }
+    if (RssFeedSync::isSyncing()) {
+      // Pulse white/grey while syncing
+      const Color syncColor = ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray);
+      renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, syncColor);
+    } else {
+      // Idle: dim outline only (draw border without fill)
+      renderer.drawRoundedRect(indX, indY, indW, indH, 1, IND_R, /*black=*/false);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Seg 1 & 2: Up/Down arrows + CHRG pill at bottom of Seg 2
-    // ─────────────────────────────────────────────────────────────────────────
-    {
-      const int seg1CentreY = zoneTop + segH + segH / 2;
-      const char* lbl = "^";   // up-arrow glyph (PULSR font)
-      const int lw = renderer.getTextWidth(PULSR_12_FONT_ID, lbl);
-      const int lh = renderer.getTextHeight(PULSR_12_FONT_ID);
-      renderer.drawText(PULSR_12_FONT_ID, (LEFT_W - lw) / 2, seg1CentreY - lh / 2, lbl, /*black=*/false);
-    }
-
-      // Up triangle: base near divider, tip above
-      for (int row = 0; row < TRI_H; row++) {
-        const int hw = (TRI_W * row) / TRI_H;
-        const int y  = divY - GAP - TRI_H + row;
-        renderer.drawLine(cx - hw, y, cx + hw, y, /*black=*/false);
-      }
-
-      // Down triangle: base near divider, tip below
-      for (int row = 0; row < TRI_H; row++) {
-        const int hw = (TRI_W * row) / TRI_H;
-        const int y  = divY + GAP + TRI_H - row;
-        renderer.drawLine(cx - hw, y, cx + hw, y, /*black=*/false);
-      }
-
-      // CHRG pill — bottom of Seg 2, just above the Seg 2/3 divider
-      const bool usbConnected = (digitalRead(20) == HIGH);
-      if (usbConnected) {
-        const int seg2Bottom = zoneTop + segH * 3;  // = seg3 top = seg2/3 divider
-        const int chrgY = seg2Bottom - SEG_MARGIN - pillH;
-        renderer.fillRoundedRect(pillX, chrgY, pillW, pillH, PILL_R, Color::LightGray);
-        const char* lbl = "CHRG";
-        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
-        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2,
-                          chrgY + (pillH - lh) / 2, lbl, /*black=*/true);
-      }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Seg 3: Battery — vertical fill bar (white fill = charged) + percentage
-    // ─────────────────────────────────────────────────────────────────────────
-    {
-      const int seg3Top = zoneTop + segH * 3;
-      const uint16_t pct = powerManager.getBatteryPercentage();
-
-      // Battery bar geometry
-      constexpr int BAR_MARGIN_X = 18;
-      constexpr int BAR_MARGIN_TOP = 8;
-      constexpr int BAR_MARGIN_BOT = 20;  // leave room for percentage text
-      constexpr int BAR_R = 3;
-      const int barX = BAR_MARGIN_X;
-      const int barY = seg3Top + BAR_MARGIN_TOP;
-      const int barW = LEFT_W - BAR_MARGIN_X * 2;
-      const int barH = segH - BAR_MARGIN_TOP - BAR_MARGIN_BOT;
-
-      // Outline
-      renderer.drawRoundedRect(barX, barY, barW, barH, 1, BAR_R, /*black=*/false);
-
-      // Fill from bottom: white = charged portion
-      const int fillH = (barH * pct) / 100;
-      if (fillH > 0) {
-        renderer.fillRoundedRect(barX, barY + (barH - fillH), barW, fillH, BAR_R, Color::White);
-      }
-
-      // Percentage text centred below bar
-      const std::string pctStr = std::to_string(pct) + "%";
-      const int tw = renderer.getTextWidth(PULSR_10_FONT_ID, pctStr.c_str());
-      const int th = renderer.getTextHeight(PULSR_10_FONT_ID);
-      const int txtY = seg3Top + segH - BAR_MARGIN_BOT + (BAR_MARGIN_BOT - th) / 2;
-      renderer.drawText(PULSR_10_FONT_ID, (LEFT_W - tw) / 2, txtY, pctStr.c_str(), /*black=*/false);
-    }
+    // Centered "FEED" label — white text (visible on both dark bg and lit pill)
+    const char* feedLabel = "FEED";
+    const int lblW = renderer.getTextWidth(SMALL_FONT_ID, feedLabel);
+    const int lblH = renderer.getTextHeight(SMALL_FONT_ID);
+    renderer.drawText(SMALL_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, feedLabel, /*black=*/false);
   }
 
   // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
