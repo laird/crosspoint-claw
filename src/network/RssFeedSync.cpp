@@ -412,7 +412,11 @@ void syncTask(void*) {
 
   // 2. Load last sync timestamp — skip anything older than this
   const uint32_t lastSync = loadLastSyncTime();
-  uint32_t newestSeen = lastSync;
+  // We only advance the watermark after we've gone all the way back to lastSync.
+  // oldestSuccess = timestamp of the oldest item we successfully processed this run.
+  // We save oldestSuccess at the end — this ensures that any item that failed or
+  // was interrupted between oldestSuccess and the newest item will be retried next sync.
+  uint32_t oldestSuccess = 0;
 
   // Count new file/image items for progress display (feed is newest-first; stop at lastSync)
   s_dlCurrent = 0;
@@ -477,13 +481,18 @@ void syncTask(void*) {
       continue;
     }
 
-    // Track newest processed item's timestamp
+    // Record this item's timestamp — since feed is newest-first, each iteration
+    // is older than the last, so this keeps getting overwritten with older values.
+    // After the loop completes fully, oldestSuccess = oldest item we processed.
     const uint32_t t = parseRfc2822(item.pubDate);
-    if (t > newestSeen) newestSeen = t;
+    if (t > 0) oldestSuccess = t;
   }
 
-  // Save the newest timestamp we successfully processed
-  if (newestSeen > lastSync) saveLastSyncTime(newestSeen);
+  // Save watermark: only after the loop ran all the way back.
+  // We save the timestamp of the OLDEST item we processed — anything newer that
+  // failed will be retried next sync (they have newer timestamps > oldestSuccess).
+  // We do NOT save if the loop never processed any items successfully.
+  if (oldestSuccess > lastSync) saveLastSyncTime(oldestSuccess);
 
   LOG_DBG(TAG, "Feed sync complete");
   { char _b[64]; snprintf(_b, sizeof(_b), "Sync complete — %d files downloaded", s_dlCurrent); logToFile("INFO", _b); }
