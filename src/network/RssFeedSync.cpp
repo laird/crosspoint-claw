@@ -22,7 +22,12 @@ constexpr const char* NEWS_FILE = "/News.md";
 constexpr size_t NEWS_MAX_SIZE = 50 * 1024;
 
 TaskHandle_t syncTaskHandle = nullptr;
-bool s_feedActive = false;
+RssFeedSync::State s_state = RssFeedSync::State::IDLE;
+int s_dlCurrent = 0;
+int s_dlTotal   = 0;
+
+static void setState(RssFeedSync::State st) { s_state = st; }
+
 
 // ---------------------------------------------------------------------------
 // RSS item model
@@ -351,6 +356,7 @@ void ensureParentDir(const std::string& path) {
 // ---------------------------------------------------------------------------
 void syncTask(void*) {
   LOG_DBG(TAG, "Feed sync started");
+  setState(RssFeedSync::State::FETCHING);
 
   const std::string feedUrl = SETTINGS.feedUrl;
 
@@ -360,17 +366,19 @@ void syncTask(void*) {
     RssParserStream stream(rssParser);
     if (!HttpDownloader::fetchUrl(feedUrl, stream)) {
       LOG_ERR(TAG, "Failed to fetch feed: %s", feedUrl.c_str());
+      setState(RssFeedSync::State::ERROR);
       syncTaskHandle = nullptr;
-      s_feedActive = false;
       vTaskDelete(nullptr);
       return;
     }
   }  // stream destroyed here → parser.flush()
 
+  setState(RssFeedSync::State::PARSING);
+
   if (rssParser.error()) {
     LOG_ERR(TAG, "Failed to parse feed XML");
+    setState(RssFeedSync::State::ERROR);
     syncTaskHandle = nullptr;
-    s_feedActive = false;
     vTaskDelete(nullptr);
     return;
   }
@@ -379,14 +387,23 @@ void syncTask(void*) {
   LOG_DBG(TAG, "Parsed %u items from feed", items.size());
 
   if (items.empty()) {
+    setState(RssFeedSync::State::DONE);
     syncTaskHandle = nullptr;
-    s_feedActive = false;
     vTaskDelete(nullptr);
     return;
   }
 
   // 2. Load seen GUIDs
   auto seen = loadSeenGuids();
+
+  // Count unseen file/image items for progress display
+  s_dlCurrent = 0;
+  s_dlTotal = 0;
+  for (const auto& item : items) {
+    if (item.guid.empty() || seen.count(item.guid)) continue;
+    if (item.crosspointType == "file" || item.crosspointType == "image") s_dlTotal++;
+  }
+  if (s_dlTotal > 0) setState(RssFeedSync::State::DOWNLOADING);
 
   // 3. Process each unseen item
   for (const auto& item : items) {
@@ -406,7 +423,8 @@ void syncTask(void*) {
         LOG_ERR(TAG, "Download failed for %s → %s", item.enclosureUrl.c_str(), item.crosspointPath.c_str());
         continue;
       }
-      LOG_DBG(TAG, "Downloaded %s → %s", type.c_str(), item.crosspointPath.c_str());
+      s_dlCurrent++;
+      LOG_DBG(TAG, "Downloaded %s → %s [%d/%d]", type.c_str(), item.crosspointPath.c_str(), s_dlCurrent, s_dlTotal);
       // Extract filename and add to shared received-files list for display
       const std::string& path = item.crosspointPath;
       const auto slash = path.rfind('/');
@@ -442,8 +460,8 @@ void syncTask(void*) {
   }
 
   LOG_DBG(TAG, "Feed sync complete");
+  setState(RssFeedSync::State::DONE);
   syncTaskHandle = nullptr;
-  s_feedActive = false;
   vTaskDelete(nullptr);
 }
 
@@ -461,11 +479,29 @@ void startSync() {
   // Guard: only one sync at a time
   if (syncTaskHandle != nullptr) return;
 
-  s_feedActive = true;
+  s_state = RssFeedSync::State::FETCHING;  // set immediately so indicator lights before task starts
+  s_dlCurrent = 0; s_dlTotal = 0;
   xTaskCreate(syncTask, "FeedSync", 8192, nullptr, 1, &syncTaskHandle);
 }
 
-bool isSyncing()    { return syncTaskHandle != nullptr; }
-bool isFeedActive() { return s_feedActive; }
+State getState()    { return s_state; }
+bool isFeedActive() { return s_state != RssFeedSync::State::IDLE && s_state != RssFeedSync::State::DONE && s_state != RssFeedSync::State::ERROR; }
+bool isSyncing()    { return s_state == RssFeedSync::State::DOWNLOADING; }
+
+const char* getStatusLabel() {
+  switch (s_state) {
+    case RssFeedSync::State::FETCHING:    return "FEED";
+    case RssFeedSync::State::PARSING:     return "SYNC";
+    case RssFeedSync::State::DOWNLOADING: {
+      // "n/nn" progress — written into a static buffer
+      static char buf[8];
+      snprintf(buf, sizeof(buf), "%d/%d", s_dlCurrent + 1, s_dlTotal);
+      return buf;
+    }
+    case RssFeedSync::State::ERROR:       return "ERR!";
+    case RssFeedSync::State::DONE:        return "DONE";
+    default:                 return "FEED";
+  }
+}
 
 }  // namespace RssFeedSync

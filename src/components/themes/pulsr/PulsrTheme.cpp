@@ -144,16 +144,33 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       }
       pillY += pillH + PILL_GAP;
 
-      // FEED pill — lit while feed is active (syncing or waiting), dark outline when done
-      if (RssFeedSync::isFeedActive()) {
-        const Color feedColor = RssFeedSync::isSyncing()
-            ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-            : Color::LightGray;
-        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
-        const char* lbl = "FEED";
-        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
-        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+      // FEED pill — colour + label reflect sync state
+      {
+        const auto feedState = RssFeedSync::getState();
+        Color feedColor = Color::Black;  // invisible (IDLE/DONE)
+        bool showPill = false;
+        switch (feedState) {
+          case RssFeedSync::State::FETCHING:
+            feedColor = Color::LightGray; showPill = true; break;
+          case RssFeedSync::State::PARSING:
+            feedColor = ((millis() / 500) % 2 == 0 ? Color::LightGray : Color::DarkGray);
+            showPill = true; break;
+          case RssFeedSync::State::DOWNLOADING:
+            feedColor = ((millis() / 400) % 2 == 0 ? Color::White : Color::LightGray);
+            showPill = true; break;
+          case RssFeedSync::State::ERROR:
+            feedColor = Color::White; showPill = true; break;
+          case RssFeedSync::State::DONE:
+            feedColor = Color::LightGray; showPill = true; break;
+          default: break;
+        }
+        if (showPill) {
+          renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
+          const char* lbl = RssFeedSync::getStatusLabel();
+          const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+          const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+          renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+        }
       }
     }
 
