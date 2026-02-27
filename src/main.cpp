@@ -452,18 +452,53 @@ void runScreenshotTour() {
   onGoHome();
   captureStep("home");
 
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
-  captureStep("settings");
+  // ── Settings: all four tabs ───────────────────────────────────────────────
+  {
+    exitActivity();
+    auto* settings = new SettingsActivity(renderer, mappedInputManager, onGoHome);
+    enterNewActivity(settings);
+    captureStep("settings_disp");
 
+    settings->enterCategory(1);
+    captureStep("settings_read");
+
+    settings->enterCategory(2);
+    captureStep("settings_ctrl");
+
+    settings->enterCategory(3);
+    captureStep("settings_syst");
+  }
+
+  // ── Browse / Library ──────────────────────────────────────────────────────
   exitActivity();
   enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
   captureStep("browse");
 
+  // ── Recent Books ──────────────────────────────────────────────────────────
   exitActivity();
   enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
   captureStep("recents");
 
+  // ── Reader (open last book if available) ─────────────────────────────────
+  if (!APP_STATE.openEpubPath.empty()) {
+    exitActivity();
+    enterNewActivity(new ReaderActivity(renderer, mappedInputManager, APP_STATE.openEpubPath,
+                                        onGoHome, onGoToMyLibraryWithPath));
+    captureStep("reader");
+    exitActivity();
+  }
+
+  // ── OPDS Browser ─────────────────────────────────────────────────────────
+  exitActivity();
+  enterNewActivity(new OpdsBookBrowserActivity(renderer, mappedInputManager, onGoHome));
+  captureStep("opds");
+
+  // ── File Transfer / Web Server ────────────────────────────────────────────
+  exitActivity();
+  enterNewActivity(new CrossPointWebServerActivity(renderer, mappedInputManager, onGoHome));
+  captureStep("file_transfer");
+
+  // ── Network screens ───────────────────────────────────────────────────────
   exitActivity();
   enterNewActivity(new NetworkModeSelectionActivity(renderer, mappedInputManager,
                                                     [](NetworkMode) {}, [] {}));

@@ -47,6 +47,7 @@ void SettingsActivity::onEnter() {
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_CAT_FEED_SYNC, SettingAction::FeedSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
@@ -129,6 +130,20 @@ void SettingsActivity::loop() {
     }
     settingsCount = static_cast<int>(currentSettings->size());
   }
+}
+
+void SettingsActivity::enterCategory(int categoryIndex) {
+  if (categoryIndex < 0 || categoryIndex >= categoryCount) return;
+  selectedCategoryIndex = categoryIndex;
+  selectedSettingIndex = 0;
+  switch (selectedCategoryIndex) {
+    case 0: currentSettings = &displaySettings; break;
+    case 1: currentSettings = &readerSettings; break;
+    case 2: currentSettings = &controlsSettings; break;
+    case 3: currentSettings = &systemSettings; break;
+  }
+  settingsCount = static_cast<int>(currentSettings->size());
+  requestUpdate();
 }
 
 void SettingsActivity::toggleCurrentSetting() {
@@ -235,6 +250,17 @@ void SettingsActivity::render(RenderLock&&) {
         return valueText;
       },
       true);
+
+  // Draw description for Feed Sync action when selected
+  if (currentSettings == &systemSettings && selectedSettingIndex >= 0 &&
+      selectedSettingIndex < static_cast<int>(systemSettings.size()) &&
+      systemSettings[selectedSettingIndex].action == SettingAction::FeedSync) {
+    const char* hint = tr(STR_FEED_SYNC_HINT);
+    const int hintY = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing - renderer.getTextHeight(SMALL_FONT_ID) - 4;
+    const int hintW = renderer.getTextWidth(SMALL_FONT_ID, hint);
+    const int hintX = (pageWidth - hintW) / 2;
+    renderer.drawText(SMALL_FONT_ID, hintX, hintY, hint, /*black=*/true);
+  }
 
   // Draw help text
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
