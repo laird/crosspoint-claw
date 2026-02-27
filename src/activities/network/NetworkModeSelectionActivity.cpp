@@ -6,6 +6,7 @@
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "fontIds.h"
 
 namespace {
 constexpr int MENU_ITEM_COUNT = 3;
@@ -80,6 +81,19 @@ void NetworkModeSelectionActivity::render(RenderLock&&) {
   // Draw help text at bottom
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+
+  // Show recently received files (from feed sync or HTTP uploads) below the menu
+  const auto& received = UITheme::getReceivedFiles();
+  if (!received.empty()) {
+    const int lineH = renderer.getLineHeight(PULSR_10_FONT_ID);
+    int ry = contentTop + contentHeight - (static_cast<int>(received.size()) * lineH);
+    for (const auto& name : received) {
+      if (ry >= contentTop) {
+        renderer.drawText(PULSR_10_FONT_ID, metrics.contentSidePadding, ry, name.c_str(), /*black=*/true);
+      }
+      ry += lineH;
+    }
+  }
 
   renderer.displayBuffer();
 }

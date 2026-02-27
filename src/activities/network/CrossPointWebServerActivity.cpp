@@ -52,7 +52,7 @@ void CrossPointWebServerActivity::onEnter() {
   connectedSSID.clear();
   lastHandleClientTime = 0;
   uploadedFiles.clear();
-  UITheme::clearReceivedFiles();
+  // Note: don't clear received files here — feed sync may have already run before user opened this screen
   requestUpdate();
 
   // Launch network mode selection subactivity
