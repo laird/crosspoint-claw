@@ -360,6 +360,23 @@ void CrossPointWebServerActivity::loop() {
       requestUpdate();
     }
 
+    // Animate RSS sync indicator while syncing
+    if (RssFeedSync::isSyncing()) {
+      const unsigned long now = millis();
+      static unsigned long lastSyncRender = 0;
+      if (now - lastSyncRender > 600) {
+        lastSyncRender = now;
+        requestUpdate();
+      }
+    } else {
+      static bool wasSyncing = false;
+      if (wasSyncing) {
+        wasSyncing = false;
+        requestUpdate();  // final refresh to clear the indicator
+      }
+      wasSyncing = RssFeedSync::isSyncing();  // always false here, resets for next sync
+    }
+
     // Monitor upload status and trigger display refresh on file close only
     // Rate-limited to avoid excessive e-ink refreshes
     if (webServer) {
