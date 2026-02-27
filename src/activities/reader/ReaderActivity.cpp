@@ -8,6 +8,7 @@
 #include "Epub.h"
 #include "EpubReaderActivity.h"
 #include "Txt.h"
+#include "MdReaderActivity.h"
 #include "TxtReaderActivity.h"
 #include "Xtc.h"
 #include "XtcReaderActivity.h"
@@ -26,9 +27,12 @@ bool ReaderActivity::isXtcFile(const std::string& path) {
   return StringUtils::checkFileExtension(path, ".xtc") || StringUtils::checkFileExtension(path, ".xtch");
 }
 
+bool ReaderActivity::isMdFile(const std::string& path) {
+  return StringUtils::checkFileExtension(path, ".md");
+}
+
 bool ReaderActivity::isTxtFile(const std::string& path) {
-  return StringUtils::checkFileExtension(path, ".txt") ||
-         StringUtils::checkFileExtension(path, ".md");  // Treat .md as txt files (until we have a markdown reader)
+  return StringUtils::checkFileExtension(path, ".txt");
 }
 
 std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
@@ -98,6 +102,14 @@ void ReaderActivity::onGoToXtcReader(std::unique_ptr<Xtc> xtc) {
       renderer, mappedInput, std::move(xtc), [this, xtcPath] { goToLibrary(xtcPath); }, [this] { onGoBack(); }));
 }
 
+void ReaderActivity::onGoToMdReader(std::unique_ptr<Txt> txt) {
+  const auto mdPath = txt->getPath();
+  currentBookPath = mdPath;
+  exitActivity();
+  enterNewActivity(new MdReaderActivity(
+      renderer, mappedInput, std::move(txt), [this, mdPath] { goToLibrary(mdPath); }, [this] { onGoBack(); }));
+}
+
 void ReaderActivity::onGoToTxtReader(std::unique_ptr<Txt> txt) {
   const auto txtPath = txt->getPath();
   currentBookPath = txtPath;
@@ -128,6 +140,13 @@ void ReaderActivity::onEnter() {
       return;
     }
     onGoToXtcReader(std::move(xtc));
+  } else if (isMdFile(initialBookPath)) {
+    auto txt = loadTxt(initialBookPath);
+    if (!txt) {
+      onGoBack();
+      return;
+    }
+    onGoToMdReader(std::move(txt));
   } else if (isTxtFile(initialBookPath)) {
     auto txt = loadTxt(initialBookPath);
     if (!txt) {

@@ -18,7 +18,12 @@ pio run
 pio run --target upload
 
 # Build and copy to SD card (SD card OTA install)
-pio run && cp .pio/build/default/firmware.bin /media/<user>/<SDCARD>/firmware.bin
+# The SD card device letter changes between reconnections (sda, sdb, etc.) — always use lsblk to find it.
+# Always verify the file landed on the card before ejecting.
+SDCARD=$(lsblk -rno NAME,MOUNTPOINT | awk '/70B0-0D19/{print $2}') && \
+  cp .pio/build/default/firmware.bin "$SDCARD/firmware.bin" && \
+  ls -lh "$SDCARD/firmware.bin" && \
+  udisksctl unmount -b /dev/$(lsblk -rno NAME,MOUNTPOINT | awk '/70B0-0D19/{print $1}')
 
 # Run i18n code generator (required after editing any translation YAML)
 python3 scripts/gen_i18n.py lib/I18n/translations lib/I18n/
@@ -90,6 +95,8 @@ Missing translations fall back to English automatically. `gen_i18n.py` also runs
 ### SD Card OTA
 
 On boot, `main.cpp` checks for `/firmware.bin` on the SD card. If found, it flashes it using the ESP32 `Update` library (with a progress bar displayed), deletes the file, and restarts. This is the primary development flash workflow when USB is unavailable.
+
+**Important:** The SD card's Linux device letter (`sda`, `sdb`, etc.) changes unpredictably between reconnections. Always run `lsblk` to find the current mount point before copying. After copying, always verify with `ls -lh` that the file is actually on the card — a silently wrong path means the firmware never lands there and the device won't update. OTA only runs at boot/deep-sleep-wake (`setup()`), not while the device is running.
 
 ### Data Storage
 
