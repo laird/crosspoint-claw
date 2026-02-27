@@ -45,6 +45,7 @@ void CrossPointWebServerActivity::onEnter() {
   connectedIP.clear();
   connectedSSID.clear();
   lastHandleClientTime = 0;
+  uploadedFiles.clear();
   requestUpdate();
 
   // Launch network mode selection subactivity
@@ -350,9 +351,11 @@ void CrossPointWebServerActivity::loop() {
       const auto uploadStatus = webServer->getUploadStatus();
       const unsigned long now = millis();
       const bool fileCompleted = uploadStatus.lastCompleteAt > lastKnownCompleteAt;
-      const bool rateLimitOk = (now - lastTransferUpdateTime) > 3000;  // max 1 refresh per 3s
 
-      if (fileCompleted && rateLimitOk) {
+      if (fileCompleted) {
+        if (!uploadStatus.lastCompleteName.empty()) {
+          uploadedFiles.push_back(uploadStatus.lastCompleteName);
+        }
         lastKnownCompleteAt = uploadStatus.lastCompleteAt;
         lastUploadInProgress = uploadStatus.inProgress;
         lastTransferUpdateTime = now;
@@ -477,21 +480,22 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     drawQRCode(renderer, qrX, startY, hostnameUrl);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
-    // Transfer status below URL QR
-    if (uploadStatus.inProgress) {
-      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
-                                    (std::string("● ") + uploadStatus.filename).c_str(), true,
-                                    EpdFontFamily::BOLD);
-      startY += metrics.verticalSpacing;
-    } else if (uploadStatus.lastCompleteAt > 0) {
-      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
-                                    (std::string("✓ ") + uploadStatus.lastCompleteName).c_str(), true);
-      startY += metrics.verticalSpacing;
-    }
-
     startY += drawCenteredWrapped(UI_10_FONT_ID, startY, hostnameUrl.c_str(), true);
     startY += metrics.verticalSpacing;
-    drawCenteredWrapped(SMALL_FONT_ID, startY, ipUrl.c_str(), true);
+    startY += drawCenteredWrapped(SMALL_FONT_ID, startY, ipUrl.c_str(), true);
+    startY += metrics.verticalSpacing;
+
+    // Completed uploads list (oldest first), left-justified in LCARS font
+    const int lcarsLineH = renderer.getLineHeight(LCARS_12_FONT_ID);
+    for (const auto& name : uploadedFiles) {
+      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY, name.c_str(), true);
+      startY += lcarsLineH;
+    }
+    // In-progress upload
+    if (uploadStatus.inProgress && !uploadStatus.filename.empty()) {
+      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY,
+                        (std::string("● ") + uploadStatus.filename).c_str(), true, EpdFontFamily::BOLD);
+    }
   } else {
     startY += metrics.verticalSpacing * 2;
 
@@ -507,22 +511,23 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     drawQRCode(renderer, qrX, startY, webInfo);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
-    // Transfer status below QR
-    if (uploadStatus.inProgress) {
-      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
-                                    (std::string("● ") + uploadStatus.filename).c_str(), true,
-                                    EpdFontFamily::BOLD);
-      startY += metrics.verticalSpacing;
-    } else if (uploadStatus.lastCompleteAt > 0) {
-      startY += drawCenteredWrapped(UI_10_FONT_ID, startY,
-                                    (std::string("✓ ") + uploadStatus.lastCompleteName).c_str(), true);
-      startY += metrics.verticalSpacing;
-    }
-
     startY += drawCenteredWrapped(UI_10_FONT_ID, startY, webInfo.c_str(), true);
     startY += 5;
     std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/";
-    drawCenteredWrapped(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
+    startY += drawCenteredWrapped(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
+    startY += metrics.verticalSpacing;
+
+    // Completed uploads list (oldest first), left-justified in LCARS font
+    const int lcarsLineH = renderer.getLineHeight(LCARS_12_FONT_ID);
+    for (const auto& name : uploadedFiles) {
+      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY, name.c_str(), true);
+      startY += lcarsLineH;
+    }
+    // In-progress upload
+    if (uploadStatus.inProgress && !uploadStatus.filename.empty()) {
+      renderer.drawText(LCARS_12_FONT_ID, contentLeft, startY,
+                        (std::string("● ") + uploadStatus.filename).c_str(), true, EpdFontFamily::BOLD);
+    }
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_EXIT), "", "", "");

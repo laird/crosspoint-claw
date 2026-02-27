@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "NetworkModeSelectionActivity.h"
 #include "activities/Activity.h"
@@ -49,6 +50,7 @@ class CrossPointWebServerActivity final : public Activity {
   size_t lastUploadReceived = 0;
   unsigned long lastTransferUpdateTime = 0;
   unsigned long lastKnownCompleteAt = 0;
+  std::vector<std::string> uploadedFiles;  // Accumulated list of completed uploads (oldest first)
 
   void renderServerRunning() const;
 
