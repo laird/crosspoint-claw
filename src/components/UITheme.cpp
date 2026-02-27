@@ -19,6 +19,16 @@ constexpr int SKIP_PAGE_MS = 700;
 
 UITheme UITheme::instance;
 
+static bool s_networkConnected   = false;
+static bool s_networkTransferring = false;
+
+void UITheme::setNetworkStatus(bool connected, bool transferring) {
+  s_networkConnected   = connected;
+  s_networkTransferring = transferring;
+}
+bool UITheme::isNetworkConnected()   { return s_networkConnected; }
+bool UITheme::isNetworkTransferring() { return s_networkTransferring; }
+
 UITheme::UITheme() {
   auto themeType = static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme);
   setTheme(themeType);

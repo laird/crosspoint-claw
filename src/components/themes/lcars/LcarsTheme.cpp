@@ -92,6 +92,38 @@ void LcarsTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     }
   }
 
+  // ── 5. Network connectivity indicator in top segment of left bar ─────────────
+  // Grey = connected (idle), white-blink = active transfer.
+  if (UITheme::isNetworkConnected()) {
+    constexpr int IND_MARGIN = 8;
+    constexpr int NUM_SEGS   = 4;
+    const int zoneTop    = NAV_GAP + 4;
+    const int zoneBottom = H - NAV_GAP - 4;
+    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
+    const int indX = IND_MARGIN;
+    const int indY = zoneTop + IND_MARGIN;
+    const int indW = LEFT_W - IND_MARGIN * 2;
+    const int indH = segH - IND_MARGIN * 2;
+    constexpr int IND_R = 6;
+
+    const Color indColor = UITheme::isNetworkTransferring()
+                               ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
+                               : Color::LightGray;
+    renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, indColor);
+  }
+
+  // ── 6. Screen title in top bar (white, uppercase, LCARS-12) ────────────────
+  {
+    const char* raw = (title != nullptr) ? title : "HOME";
+    std::string upper(raw);
+    for (char& c : upper) c = (c >= 'a' && c <= 'z') ? c - 32 : c;
+    const int maxW  = W - LEFT_W - 12;
+    const auto lbl  = renderer.truncatedText(LCARS_12_FONT_ID, upper.c_str(), maxW);
+    const int  txtH = renderer.getTextHeight(LCARS_12_FONT_ID);
+    const int  txtY = (TOP_H - txtH) / 2;
+    renderer.drawText(LCARS_12_FONT_ID, LEFT_W + 8, txtY, lbl.c_str(), /*black=*/false);
+  }
+
   // ── 7. Battery percentage in left bar (white, bottom-aligned) ───────────────
   {
     const bool showPct =
@@ -122,6 +154,7 @@ void LcarsTheme::drawHeader(const GfxRenderer& renderer, Rect /*rect*/, const ch
 // ─────────────────────────────────────────────────────────────────────────────
 void LcarsTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label,
                                 const char* rightLabel) const {
+  if (rect.height <= 0) return;  // tabBarHeight=0 in LCARS — nothing to draw
   const Rect cr = contentRect(rect);
 
   // Solid black background across the content width
@@ -159,8 +192,11 @@ void LcarsTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
   if (tabs.empty()) return;
 
   const int W         = renderer.getScreenWidth();
+  // Clear the top bar first — erase any screen title drawn by drawHeader
+  renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, /*black=*/true);
+
   const int tabCount  = static_cast<int>(tabs.size());
-  // Reserve ~40px on the right for battery % in the left bar; tabs fill the rest of the top bar
+  // Tabs fill the rest of the top bar
   const int tabAreaW  = W - LEFT_W - 4;
   const int tabW      = tabAreaW / tabCount;
   const int barH      = TOP_H;
@@ -171,6 +207,10 @@ void LcarsTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
     char abbr[5] = {0};
     for (int c = 0; c < 4 && full[c] != '\0'; c++) {
       abbr[c] = (full[c] >= 'a' && full[c] <= 'z') ? full[c] - 32 : full[c];
+    }
+    // "Controls" → "CONT" is ambiguous; override to the universal abbreviation
+    if (abbr[0] == 'C' && abbr[1] == 'O' && abbr[2] == 'N' && abbr[3] == 'T') {
+      abbr[0] = 'C'; abbr[1] = 'T'; abbr[2] = 'R'; abbr[3] = 'L';
     }
 
     const int tx = LEFT_W + i * tabW;
@@ -237,10 +277,10 @@ void LcarsTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const int itemY = cr.y + (i % pageItems) * rowH;
     const bool isSel = (i == selectedIndex);
 
-    // Selection highlight: light-gray row fill + left edge bar
+    // Selection highlight: light-gray row fill flush to content edge
+    // (no separate left indicator bar — the LCARS left bar already provides that anchor)
     if (isSel) {
       renderer.fillRectDither(cr.x, itemY, contentW, rowH, Color::LightGray);
-      renderer.fillRect(cr.x, itemY, SEL_BAR_W, rowH, /*black=*/true);
     }
 
     // Row separator (thin black line at bottom of row)
@@ -298,31 +338,39 @@ void LcarsTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
   const GfxRenderer::Orientation origOri = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
-  const int W       = renderer.getScreenWidth();
-  const int H       = renderer.getScreenHeight();
-  const int barY    = H - TOP_H;
-  const int barH    = TOP_H;
-  const int avail   = W - LEFT_W;
-  const int totalGap = BTN_OUTER_GAP_X * (BTN_COUNT - 1);
-  const int btnW    = (avail - totalGap) / BTN_COUNT;
+  const int W     = renderer.getScreenWidth();
+  const int H     = renderer.getScreenHeight();
+  const int barY  = H - TOP_H;
+  const int barH  = TOP_H;
+  const int avail = W - LEFT_W;
+  const int btnW  = avail / BTN_COUNT;  // no gaps – flush dividers only
 
   const char* labels[BTN_COUNT] = {btn1, btn2, btn3, btn4};
 
-  for (int i = 0; i < BTN_COUNT; i++) {
-    const int x    = LEFT_W + i * (btnW + BTN_OUTER_GAP_X);
-    const int boxY = barY + BTN_MARGIN_Y;
-    const int boxH = barH - BTN_MARGIN_Y * 2;
+  // White vertical separator lines between button zones
+  for (int i = 1; i < BTN_COUNT; i++) {
+    const int lx = LEFT_W + i * btnW;
+    renderer.drawLine(lx, barY, lx, barY + barH - 1, /*black=*/false);
+  }
 
-    if (labels[i] != nullptr && labels[i][0] != '\0') {
-      // White-outlined box
-      renderer.drawRect(x, boxY, btnW, boxH, /*black=*/false);
-      // White centered label
-      const int tw = renderer.getTextWidth(SMALL_FONT_ID, labels[i]);
-      const int tx = x + (btnW - tw) / 2;
-      const int ty = boxY + BTN_LABEL_Y_OFF;
-      renderer.drawText(SMALL_FONT_ID, tx, ty, labels[i], /*black=*/false);
+  // White uppercase label centered in each zone
+  for (int i = 0; i < BTN_COUNT; i++) {
+    if (labels[i] == nullptr || labels[i][0] == '\0') continue;
+
+    // Uppercase copy
+    char upper[32];
+    int c = 0;
+    for (; labels[i][c] && c < 31; c++) {
+      upper[c] = (labels[i][c] >= 'a' && labels[i][c] <= 'z') ? labels[i][c] - 32 : labels[i][c];
     }
-    // No box drawn for empty labels
+    upper[c] = '\0';
+
+    const int x  = LEFT_W + i * btnW;
+    const int tw = renderer.getTextWidth(LCARS_10_FONT_ID, upper);
+    const int th = renderer.getTextHeight(LCARS_10_FONT_ID);
+    const int tx = x + (btnW - tw) / 2;
+    const int ty = barY + (barH - th) / 2;
+    renderer.drawText(LCARS_10_FONT_ID, tx, ty, upper, /*black=*/false);
   }
 
   renderer.setOrientation(origOri);
@@ -345,29 +393,59 @@ void LcarsTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
                                  int selectedIndex,
                                  const std::function<std::string(int)>& buttonLabel,
                                  const std::function<UIIcon(int)>& /*rowIcon*/) const {
-  // Single horizontal row of buttons, pinned just above the bottom bar.
+  // 2-column pill grid, bottom-pinned just above the bottom bar.
   const int W        = renderer.getScreenWidth();
   const int H        = renderer.getScreenHeight();
-  constexpr int GAP  = 4;
-  constexpr int PAD  = Lm::values.contentSidePadding;
+  constexpr int COLS    = 2;
+  constexpr int HGAP    = 8;   // horizontal gap between pills
+  constexpr int VGAP    = 6;   // vertical gap between rows
+  constexpr int BTN_PAD = 8;   // inner horizontal margin for button grid (independent of contentSidePadding)
   const int tileH    = Lm::values.menuRowHeight;
-  const int rowW     = W - LEFT_W - PAD * 2;
-  const int tileW    = (rowW - GAP * (buttonCount - 1)) / buttonCount;
-  const int rowY     = H - TOP_H - tileH - 8;
+  const int tileW    = (W - LEFT_W - BTN_PAD * 2 - HGAP) / COLS;
+  const int rows     = (buttonCount + COLS - 1) / COLS;
+  const int gridH    = rows * tileH + (rows - 1) * VGAP;
+  const int startY   = H - TOP_H - gridH - 8;
+  const int radius   = tileH / 2;  // fully rounded ends = pill shape
+
+  // LCARS label abbreviation: uppercase and strip generic qualifier words
+  auto lcarsLabel = [](const std::string& s) -> std::string {
+    std::string u = s;
+    for (char& c : u) c = (c >= 'a' && c <= 'z') ? c - 32 : c;
+    // Strip leading generic words
+    auto stripPrefix = [&](const char* pfx) {
+      size_t pl = strlen(pfx);
+      if (u.size() > pl && u.substr(0, pl) == pfx) u = u.substr(pl);
+    };
+    // Strip trailing generic qualifiers
+    auto stripSuffix = [&](const char* sfx) {
+      size_t sl = strlen(sfx);
+      if (u.size() > sl && u.substr(u.size() - sl) == sfx) u = u.substr(0, u.size() - sl);
+    };
+    stripPrefix("FILE ");
+    stripPrefix("MY ");
+    stripSuffix(" FILES");
+    stripSuffix(" BOOKS");
+    return u;
+  };
 
   for (int i = 0; i < buttonCount; i++) {
-    const int tx   = LEFT_W + PAD + i * (tileW + GAP);
+    const int col  = i % COLS;
+    const int row  = i / COLS;
+    const int tx   = LEFT_W + BTN_PAD + col * (tileW + HGAP);
+    const int ty   = startY + row * (tileH + VGAP);
     const bool sel = (i == selectedIndex);
 
     if (sel) {
-      renderer.fillRectDither(tx, rowY, tileW, tileH, Color::LightGray);
+      // Selected: light-gray pill, black outline, black text
+      renderer.fillRoundedRect(tx, ty, tileW, tileH, radius, Color::LightGray);
     }
-    renderer.drawRect(tx, rowY, tileW, tileH);
+    // Always draw outline (selected and unselected)
+    renderer.drawRoundedRect(tx, ty, tileW, tileH, /*lineWidth=*/1, radius, /*black=*/true);
 
-    const std::string labelStr = buttonLabel(i);
+    const std::string labelStr = lcarsLabel(buttonLabel(i));
     const int lw = renderer.getTextWidth(LCARS_10_FONT_ID, labelStr.c_str());
     const int lh = renderer.getTextHeight(LCARS_10_FONT_ID);
-    renderer.drawText(LCARS_10_FONT_ID, tx + (tileW - lw) / 2, rowY + (tileH - lh) / 2,
+    renderer.drawText(LCARS_10_FONT_ID, tx + (tileW - lw) / 2, ty + (tileH - lh) / 2,
                       labelStr.c_str(), /*black=*/true);
   }
 }
@@ -452,24 +530,14 @@ void LcarsTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     const bool isSel      = (i == selectorIndex);
 
     if (isSel) {
-      // Top inset strip (above cover, full row width)
-      renderer.fillRectDither(cr.x + SEL_BAR_W, rowY,
-                              cr.width - SEL_BAR_W, topInset, Color::LightGray);
-      // Bottom inset strip (below cover, full row width)
-      renderer.fillRectDither(cr.x + SEL_BAR_W, coverEndY,
-                              cr.width - SEL_BAR_W, topInset, Color::LightGray);
-      // Left gap between selector bar and cover (cover height only)
-      renderer.fillRectDither(cr.x + SEL_BAR_W, coverStartY,
-                              LIST_PAD_X, coverH, Color::LightGray);
-      // Text area right of cover (full row height)
-      renderer.fillRectDither(thumbEndX, rowY,
-                              cr.x + cr.width - thumbEndX, rowH, Color::LightGray);
-      // Left indicator bar
-      renderer.fillRect(cr.x, rowY, SEL_BAR_W, rowH, /*black=*/true);
+      // Fill the full row width with grey — the LCARS left bar is already black
+      // so no separate selection indicator is needed and the left edge stays flush.
+      renderer.fillRectDither(cr.x, rowY, cr.width, topInset, Color::LightGray);
+      renderer.fillRectDither(cr.x, coverEndY, cr.width, topInset, Color::LightGray);
+      renderer.fillRectDither(cr.x, coverStartY, thumbX - cr.x, coverH, Color::LightGray);
+      renderer.fillRectDither(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, Color::LightGray);
     }
 
-    // Row separator line
-    renderer.drawLine(cr.x + SEL_BAR_W, rowY + rowH - 1, cr.x + cr.width - 1, rowY + rowH - 1);
 
     // Title + author in the text column (right of cover)
     const int textX    = thumbEndX + LIST_PAD_X;
