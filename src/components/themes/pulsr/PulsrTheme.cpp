@@ -94,7 +94,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
   }
 
   // ── 5. Network connectivity indicator in top segment of left bar ─────────────
-  // Grey = connected (idle), white-blink = active transfer.
+  // Grey = connected (idle), white-blink = active transfer. Label: "HTTP"
   if (UITheme::isNetworkConnected()) {
     constexpr int IND_MARGIN = 8;
     constexpr int NUM_SEGS   = 4;
@@ -111,24 +111,42 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
                                ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
                                : Color::LightGray;
     renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, indColor);
+
+    // Centered "HTTP" label — black text on grey pill
+    const char* httpLabel = "HTTP";
+    const int lblW = renderer.getTextWidth(SMALL_FONT_ID, httpLabel);
+    const int lblH = renderer.getTextHeight(SMALL_FONT_ID);
+    renderer.drawText(SMALL_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, httpLabel, /*black=*/true);
   }
 
   // ── 5b. RSS sync indicator in second segment of left bar ───────────────────
-  // Lit white while a feed sync is running; invisible (black bg) when idle.
-  if (RssFeedSync::isSyncing()) {
+  // Lit white/pulsing while a feed sync is running; dim outline when idle. Label: "FEED"
+  {
     constexpr int IND_MARGIN = 8;
     constexpr int NUM_SEGS   = 4;
     const int zoneTop    = NAV_GAP + 4;
     const int zoneBottom = H - NAV_GAP - 4;
     const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
     const int indX = IND_MARGIN;
-    const int indY = zoneTop + segH + IND_MARGIN;   // segment 2 = offset by 1 segH
+    const int indY = zoneTop + segH + IND_MARGIN;
     const int indW = LEFT_W - IND_MARGIN * 2;
     const int indH = segH - IND_MARGIN * 2;
     constexpr int IND_R = 6;
-    // Pulse: alternate white / light-grey every 600ms so it's visibly active
-    const Color syncColor = ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray);
-    renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, syncColor);
+
+    if (RssFeedSync::isSyncing()) {
+      // Pulse white/grey while syncing
+      const Color syncColor = ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray);
+      renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, syncColor);
+    } else {
+      // Idle: dim outline only (draw border without fill)
+      renderer.drawRoundedRect(indX, indY, indW, indH, 1, IND_R, /*black=*/false);
+    }
+
+    // Centered "FEED" label — white text (visible on both dark bg and lit pill)
+    const char* feedLabel = "FEED";
+    const int lblW = renderer.getTextWidth(SMALL_FONT_ID, feedLabel);
+    const int lblH = renderer.getTextHeight(SMALL_FONT_ID);
+    renderer.drawText(SMALL_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, feedLabel, /*black=*/false);
   }
 
   // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
