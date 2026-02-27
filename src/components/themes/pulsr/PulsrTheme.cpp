@@ -77,39 +77,140 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
   // ── 3. Bottom bar strip ─────────────────────────────────────────────────────
   renderer.fillRect(LEFT_W, H - TOP_H, W - LEFT_W, TOP_H, /*black=*/true);
 
-  // ── 4. Nav segment decorators in the left bar ───────────────────────────────
-  // Horizontal white separator lines divide the straight zone into segments,
-  // giving the bar a classic PULSR multi-button appearance.
+  // ── 4-7. Left-bar segments — align with physical buttons (PWR / UP / DOWN / BATT)
+  //
+  //  The left bar is divided into 4 equal segments that visually line up with the
+  //  three physical buttons on the right edge (Power, Up, Down) plus a battery segment.
+  //
+  //  Seg 0 (top)   → Power button  : PWR pill + HTTP pill (if server active) + FEED pill (if feed active)
+  //  Seg 1         → Up button     : ↑ arrow label
+  //  Seg 2         → Down button   : ↓ arrow label
+  //  Seg 3 (bot)   → Battery       : vertical fill bar + percentage text
   {
-    constexpr int NUM_SEGS  = 4;
+    constexpr int NUM_SEGS   = 4;
     constexpr int LINE_INSET = 8;
+    constexpr int SEG_MARGIN = 6;   // inset for pills/labels within each segment
+    constexpr int PILL_R     = 5;   // pill corner radius
+    constexpr int PILL_GAP   = 3;   // gap between stacked pills
     const int zoneTop    = NAV_GAP + 4;
     const int zoneBottom = H - NAV_GAP - 4;
     const int zoneH      = zoneBottom - zoneTop;
+    const int segH       = zoneH / NUM_SEGS;
+    const int pillW      = LEFT_W - SEG_MARGIN * 2;
+    const int pillX      = SEG_MARGIN;
+
+    // ── Separator lines between segments ──────────────────────────────────────
     for (int i = 1; i < NUM_SEGS; i++) {
-      const int lineY = zoneTop + zoneH * i / NUM_SEGS;
+      const int lineY = zoneTop + segH * i;
       renderer.drawLine(LINE_INSET, lineY, LEFT_W - LINE_INSET, lineY, /*black=*/false);
     }
-  }
 
-  // ── 5. Network connectivity indicator in top segment of left bar ─────────────
-  // Grey = connected (idle), white-blink = active transfer.
-  if (UITheme::isNetworkConnected()) {
-    constexpr int IND_MARGIN = 8;
-    constexpr int NUM_SEGS   = 4;
-    const int zoneTop    = NAV_GAP + 4;
-    const int zoneBottom = H - NAV_GAP - 4;
-    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
-    const int indX = IND_MARGIN;
-    const int indY = zoneTop + IND_MARGIN;
-    const int indW = LEFT_W - IND_MARGIN * 2;
-    const int indH = segH - IND_MARGIN * 2;
-    constexpr int IND_R = 6;
+    // ─────────────────────────────────────────────────────────────────────────
+    // Seg 0: Power segment — PWR pill always present; HTTP + FEED when active.
+    //        Pills stacked top-to-bottom with PILL_GAP between them.
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      const int seg0Top = zoneTop;
+      // Determine pill height: divide segment evenly among up to 3 pills
+      constexpr int MAX_PILLS  = 3;
+      const int totalGap = PILL_GAP * (MAX_PILLS - 1);
+      const int pillH    = (segH - SEG_MARGIN * 2 - totalGap) / MAX_PILLS;
 
-    const Color indColor = UITheme::isNetworkTransferring()
-                               ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-                               : Color::LightGray;
-    renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, indColor);
+      // Helper lambda: draw one pill at the given slot index (0=top)
+      // Returns the y of the next slot.
+      int pillY = seg0Top + SEG_MARGIN;
+
+      // PWR pill — always shown, grey background, black "PWR" label
+      renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, Color::LightGray);
+      {
+        const char* lbl = "PWR";
+        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+      }
+      pillY += pillH + PILL_GAP;
+
+      // HTTP pill — only when web server is active
+      if (UITheme::isHttpServerActive()) {
+        const Color httpColor = UITheme::isNetworkTransferring()
+            ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
+            : Color::LightGray;
+        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
+        const char* lbl = "HTTP";
+        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+      }
+      pillY += pillH + PILL_GAP;
+
+      // FEED pill — lit while feed is active (syncing or waiting), dark outline when done
+      if (RssFeedSync::isFeedActive()) {
+        const Color feedColor = RssFeedSync::isSyncing()
+            ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
+            : Color::LightGray;
+        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
+        const char* lbl = "FEED";
+        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Seg 1: Up button — "↑" arrow centred in segment
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      const int seg1CentreY = zoneTop + segH + segH / 2;
+      const char* lbl = "^";   // up-arrow glyph (PULSR font)
+      const int lw = renderer.getTextWidth(PULSR_12_FONT_ID, lbl);
+      const int lh = renderer.getTextHeight(PULSR_12_FONT_ID);
+      renderer.drawText(PULSR_12_FONT_ID, (LEFT_W - lw) / 2, seg1CentreY - lh / 2, lbl, /*black=*/false);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Seg 2: Down button — "↓" arrow centred in segment
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      const int seg2CentreY = zoneTop + segH * 2 + segH / 2;
+      const char* lbl = "v";   // down-arrow glyph (PULSR font)
+      const int lw = renderer.getTextWidth(PULSR_12_FONT_ID, lbl);
+      const int lh = renderer.getTextHeight(PULSR_12_FONT_ID);
+      renderer.drawText(PULSR_12_FONT_ID, (LEFT_W - lw) / 2, seg2CentreY - lh / 2, lbl, /*black=*/false);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Seg 3: Battery — vertical fill bar (white fill = charged) + percentage
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      const int seg3Top = zoneTop + segH * 3;
+      const uint16_t pct = powerManager.getBatteryPercentage();
+
+      // Battery bar geometry
+      constexpr int BAR_MARGIN_X = 18;
+      constexpr int BAR_MARGIN_TOP = 8;
+      constexpr int BAR_MARGIN_BOT = 20;  // leave room for percentage text
+      constexpr int BAR_R = 3;
+      const int barX = BAR_MARGIN_X;
+      const int barY = seg3Top + BAR_MARGIN_TOP;
+      const int barW = LEFT_W - BAR_MARGIN_X * 2;
+      const int barH = segH - BAR_MARGIN_TOP - BAR_MARGIN_BOT;
+
+      // Outline
+      renderer.drawRoundedRect(barX, barY, barW, barH, 1, BAR_R, /*black=*/false);
+
+      // Fill from bottom: white = charged portion
+      const int fillH = (barH * pct) / 100;
+      if (fillH > 0) {
+        renderer.fillRoundedRect(barX, barY + (barH - fillH), barW, fillH, BAR_R, Color::White);
+      }
+
+      // Percentage text centred below bar
+      const std::string pctStr = std::to_string(pct) + "%";
+      const int tw = renderer.getTextWidth(PULSR_10_FONT_ID, pctStr.c_str());
+      const int th = renderer.getTextHeight(PULSR_10_FONT_ID);
+      const int txtY = seg3Top + segH - BAR_MARGIN_BOT + (BAR_MARGIN_BOT - th) / 2;
+      renderer.drawText(PULSR_10_FONT_ID, (LEFT_W - tw) / 2, txtY, pctStr.c_str(), /*black=*/false);
+    }
   }
 
   // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
@@ -124,20 +225,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     renderer.drawText(PULSR_12_FONT_ID, LEFT_W + 8, txtY, lbl.c_str(), /*black=*/false);
   }
 
-  // ── 7. Battery percentage in left bar (white, bottom-aligned) ───────────────
-  {
-    const bool showPct =
-        SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
-    if (showPct) {
-      const uint16_t pct    = powerManager.getBatteryPercentage();
-      const std::string txt = std::to_string(pct) + "%";
-      const int txtW        = renderer.getTextWidth(SMALL_FONT_ID, txt.c_str());
-      const int txtH        = renderer.getTextHeight(SMALL_FONT_ID);
-      const int txtX        = (LEFT_W - txtW) / 2;
-      const int txtY        = H - TOP_H - txtH - 6;
-      renderer.drawText(SMALL_FONT_ID, txtX, txtY, txt.c_str(), /*black=*/false);
-    }
-  }
+  // ── 7. Battery now rendered in seg 3 of the left-bar block above ───────────
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
