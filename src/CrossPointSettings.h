@@ -196,6 +196,7 @@ class CrossPointSettings {
   char feedUrl[256] = "";
   uint8_t feedNewsDays = 7;
   uint8_t feedAllowFirmware = 0;  // 0=off, 1=on
+  uint8_t feedLogToFile = 1;      // 1=always log to file (TODO: make this a setting)
 
   ~CrossPointSettings() = default;
 
