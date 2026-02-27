@@ -1,4 +1,5 @@
 #include "WifiSelectionActivity.h"
+#include "network/RssFeedSync.h"
 
 #include <GfxRenderer.h>
 #include <I18n.h>
@@ -264,6 +265,7 @@ void WifiSelectionActivity::checkConnectionStatus() {
       LOG_DBG("WIFI",
               "Connected with saved/open credentials, "
               "completing immediately");
+      RssFeedSync::startSync();  // kick off feed sync on WiFi connect
       onComplete(true);
     }
     return;
@@ -329,9 +331,11 @@ void WifiSelectionActivity::loop() {
         WIFI_STORE.addCredential(selectedSSID, enteredPassword);
       }
       // Complete - parent will start web server
+      RssFeedSync::startSync();
       onComplete(true);
     } else if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       // Skip saving, complete anyway
+      RssFeedSync::startSync();
       onComplete(true);
     }
     return;
@@ -376,6 +380,7 @@ void WifiSelectionActivity::loop() {
   // completes immediately)
   if (state == WifiSelectionState::CONNECTED) {
     // Safety fallback - immediately complete
+    RssFeedSync::startSync();
     onComplete(true);
     return;
   }
