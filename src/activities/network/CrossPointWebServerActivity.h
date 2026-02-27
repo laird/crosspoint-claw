@@ -49,6 +49,7 @@ class CrossPointWebServerActivity final : public ActivityWithSubactivity {
   bool lastUploadInProgress = false;
   size_t lastUploadReceived = 0;
   unsigned long lastTransferUpdateTime = 0;
+  unsigned long lastKnownCompleteAt = 0;
 
   void renderServerRunning() const;
 

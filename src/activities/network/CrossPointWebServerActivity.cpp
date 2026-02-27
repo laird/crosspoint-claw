@@ -329,6 +329,7 @@ void CrossPointWebServerActivity::loop() {
             return;
           }
         }
+
       }
       lastHandleClientTime = millis();
     }
@@ -339,21 +340,17 @@ void CrossPointWebServerActivity::loop() {
       return;
     }
 
-    // Monitor upload status and trigger display refresh on changes
+    // Monitor upload status and trigger display refresh on file close only
+    // Rate-limited to avoid excessive e-ink refreshes
     if (webServer) {
       const auto uploadStatus = webServer->getUploadStatus();
       const unsigned long now = millis();
+      const bool fileCompleted = uploadStatus.lastCompleteAt > lastKnownCompleteAt;
+      const bool rateLimitOk = (now - lastTransferUpdateTime) > 3000;  // max 1 refresh per 3s
 
-      // Trigger re-render when upload starts, ends, or makes significant progress
-      const bool uploadStarted = uploadStatus.inProgress && !lastUploadInProgress;
-      const bool uploadEnded = !uploadStatus.inProgress && lastUploadInProgress;
-      const bool significantProgress = uploadStatus.inProgress &&
-          (uploadStatus.received - lastUploadReceived > 32768 || // every 32KB
-           now - lastTransferUpdateTime > 1000);                 // or every 1 second
-
-      if (uploadStarted || uploadEnded || significantProgress) {
+      if (fileCompleted && rateLimitOk) {
+        lastKnownCompleteAt = uploadStatus.lastCompleteAt;
         lastUploadInProgress = uploadStatus.inProgress;
-        lastUploadReceived = uploadStatus.received;
         lastTransferUpdateTime = now;
         requestUpdate();
       }
@@ -422,7 +419,7 @@ void CrossPointWebServerActivity::renderServerRunning() const {
 
   std::string headerTitle = isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER);
   if (uploadStatus.inProgress) {
-    headerTitle = "● Receiving File...";
+    // Keep title static during transfer — e-ink too slow for mid-transfer updates
   }
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
