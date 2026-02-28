@@ -131,6 +131,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["statusBarTitle"] = s.statusBarTitle;
   doc["statusBarBattery"] = s.statusBarBattery;
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;
+  doc["dangerZoneEnabled"] = s.dangerZoneEnabled;
+  doc["dangerZonePassword_obf"] = obfuscation::obfuscateToBase64(s.dangerZonePassword);
 
   String json;
   serializeJson(doc, json);
@@ -216,6 +218,14 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
 
   s.statusBarProgressBarThickness = doc["statusBarProgressBarThickness"] | (uint8_t)S::PROGRESS_BAR_NORMAL;
+  s.dangerZoneEnabled = doc["dangerZoneEnabled"] | (uint8_t)0;
+  {
+    bool pwOk = false;
+    std::string pw = obfuscation::deobfuscateFromBase64(doc["dangerZonePassword_obf"] | "", &pwOk);
+    if (!pwOk) pw = doc["dangerZonePassword"] | "";
+    strncpy(s.dangerZonePassword, pw.c_str(), sizeof(s.dangerZonePassword) - 1);
+    s.dangerZonePassword[sizeof(s.dangerZonePassword) - 1] = '\0';
+  }
 
   return true;
 }
