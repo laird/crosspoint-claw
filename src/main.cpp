@@ -363,6 +363,28 @@ void setup() {
 
   SETTINGS.loadFromFile();
   I18N.loadSettings();
+
+  // Boot log: write early so any subsequent crash is detectable
+  {
+    const esp_reset_reason_t resetReason = esp_reset_reason();
+    const char* resetStr = (resetReason == ESP_RST_PANIC)    ? "panic"    :
+                           (resetReason == ESP_RST_INT_WDT)  ? "int_wdt"  :
+                           (resetReason == ESP_RST_TASK_WDT) ? "task_wdt" :
+                           (resetReason == ESP_RST_WDT)      ? "wdt"      :
+                           (resetReason == ESP_RST_BROWNOUT) ? "brownout" :
+                           (resetReason == ESP_RST_SW)       ? "sw"       :
+                           (resetReason == ESP_RST_POWERON)  ? "poweron"  :
+                           (resetReason == ESP_RST_DEEPSLEEP)? "deepsleep": "other";
+    FsFile bootLog;
+    if (Storage.openFileForWrite("MAIN", "/boot.log", bootLog)) {
+      char buf[160];
+      snprintf(buf, sizeof(buf), "version=%s reset=%s heap=%u uptime=%lu\n",
+               CROSSPOINT_VERSION, resetStr, ESP.getFreeHeap(), millis());
+      bootLog.print(buf);
+      bootLog.close();
+      LOG_INF("MAIN", "Boot: version=%s reset=%s", CROSSPOINT_VERSION, resetStr);
+    }
+  }
   KOREADER_STORE.loadFromFile();
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);

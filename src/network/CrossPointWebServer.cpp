@@ -171,6 +171,8 @@ void CrossPointWebServer::begin() {
   server->on("/api/screenshot-tour", HTTP_POST, [this] { handlePostScreenshotTour(); });
   server->on("/api/flash", HTTP_POST, [this] { handlePostFlash(); });
   server->on("/api/firmware-status", HTTP_GET, [this] { handleGetFirmwareStatus(); });
+  server->on("/api/boot-log", HTTP_GET, [this] { handleGetLog("/boot.log"); });
+  server->on("/api/feed/log", HTTP_GET, [this] { handleGetLog("/feed-sync.log"); });
 
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
@@ -373,6 +375,17 @@ void CrossPointWebServer::handleStatus() const {
   JsonDocument doc;
   doc["version"] = CROSSPOINT_VERSION;
   doc["build"] = __DATE__ " " __TIME__;
+  // Reset reason (useful for diagnosing OTA rollbacks and crashes)
+  const esp_reset_reason_t rr = esp_reset_reason();
+  const char* rrStr = (rr == ESP_RST_PANIC)    ? "panic"    :
+                      (rr == ESP_RST_INT_WDT)  ? "int_wdt"  :
+                      (rr == ESP_RST_TASK_WDT) ? "task_wdt" :
+                      (rr == ESP_RST_WDT)      ? "wdt"      :
+                      (rr == ESP_RST_BROWNOUT) ? "brownout" :
+                      (rr == ESP_RST_SW)       ? "sw"       :
+                      (rr == ESP_RST_POWERON)  ? "poweron"  :
+                      (rr == ESP_RST_DEEPSLEEP)? "deepsleep": "other";
+  doc["resetReason"] = rrStr;
   doc["ip"] = ipAddr;
   doc["mode"] = apMode ? "AP" : "STA";
   doc["rssi"] = apMode ? 0 : WiFi.RSSI();
@@ -1476,6 +1489,28 @@ void CrossPointWebServer::handlePostReboot() {
   delay(200);  // Allow response to be sent
   SETTINGS.saveToFile();
   ESP.restart();
+}
+
+void CrossPointWebServer::handleGetLog(const char* path) const {
+  FsFile f = Storage.open(path);
+  if (!f || f.isDirectory()) {
+    server->send(404, "text/plain", "Log not found");
+    return;
+  }
+  const size_t size = f.size();
+  std::string content;
+  content.reserve(std::min(size, (size_t)8192));
+  // Read last 8KB max
+  if (size > 8192) f.seek(size - 8192);
+  char buf[256];
+  while (f.available()) {
+    const int n = f.read((uint8_t*)buf, sizeof(buf) - 1);
+    if (n <= 0) break;
+    buf[n] = '\0';
+    content += buf;
+  }
+  f.close();
+  server->send(200, "text/plain", content.c_str());
 }
 
 void CrossPointWebServer::handleGetDangerZoneStatus() const {
