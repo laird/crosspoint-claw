@@ -1,4 +1,4 @@
-# What's New in CrossPoint (Laird Fork)
+# What's New in CrossPoint OpenClaw
 
 ## Purpose
 
