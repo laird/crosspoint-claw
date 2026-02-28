@@ -145,11 +145,12 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       }
       pillY += pillH + PILL_GAP;
 
-      // FEED pill — colour + label reflect sync state
+      // FEED pill — colour + label reflect sync state; falls back to DZ pill when idle
       {
         const auto feedState = RssFeedSync::getState();
         Color feedColor = Color::Black;  // invisible (IDLE/DONE)
         bool showPill = false;
+        const char* pillLabel = nullptr;
         switch (feedState) {
           case RssFeedSync::State::FETCHING:
             feedColor = Color::LightGray; showPill = true; break;
@@ -166,11 +167,18 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
           default: break;
         }
         if (showPill) {
+          pillLabel = RssFeedSync::getStatusLabel();
+        } else if (SETTINGS.dangerZoneEnabled) {
+          // Show "DZ" warning pill when Danger Zone is active and feed is idle
+          showPill = true;
+          feedColor = ((millis() / 800) % 2 == 0 ? Color::White : Color::DarkGray);
+          pillLabel = "DZ";
+        }
+        if (showPill && pillLabel) {
           renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
-          const char* lbl = RssFeedSync::getStatusLabel();
-          const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+          const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, pillLabel);
           const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-          renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+          renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, pillLabel, /*black=*/true);
         }
       }
     }

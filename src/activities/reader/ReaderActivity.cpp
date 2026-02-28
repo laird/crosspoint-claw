@@ -109,9 +109,7 @@ void ReaderActivity::onGoToXtcReader(std::unique_ptr<Xtc> xtc) {
 void ReaderActivity::onGoToMdReader(std::unique_ptr<Txt> txt) {
   const auto mdPath = txt->getPath();
   currentBookPath = mdPath;
-  exitActivity();
-  enterNewActivity(new MdReaderActivity(
-      renderer, mappedInput, std::move(txt), [this, mdPath] { goToLibrary(mdPath); }, [this] { onGoBack(); }));
+  activityManager.replaceActivity(std::make_unique<MdReaderActivity>(renderer, mappedInput, std::move(txt)));
 }
 
 void ReaderActivity::onGoToTxtReader(std::unique_ptr<Txt> txt) {

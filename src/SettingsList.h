@@ -138,5 +138,11 @@ inline std::vector<SettingInfo> getSettingsList() {
                          StrId::STR_CAT_FEED_SYNC),
       SettingInfo::Toggle(StrId::STR_FEED_ALLOW_FIRMWARE, &CrossPointSettings::feedAllowFirmware, "feedAllowFirmware",
                           StrId::STR_CAT_FEED_SYNC),
+
+      // --- Danger Zone (web-only toggle; password set on device only) ---
+      SettingInfo::Toggle(StrId::STR_DANGER_ZONE, &CrossPointSettings::dangerZoneEnabled, "dangerZoneEnabled",
+                          StrId::STR_CAT_DANGER_ZONE),
+      SettingInfo::String(StrId::STR_DANGER_ZONE_PASSWORD, SETTINGS.dangerZonePassword,
+                          sizeof(SETTINGS.dangerZonePassword), "dangerZonePassword", StrId::STR_CAT_DANGER_ZONE),
   };
 }

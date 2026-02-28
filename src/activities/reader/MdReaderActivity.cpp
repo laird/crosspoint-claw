@@ -234,7 +234,7 @@ static MdLine parseMdLine(const std::string& raw, bool& inCodeFence, bool stripI
 // ── Activity lifecycle ────────────────────────────────────────────────────────
 
 void MdReaderActivity::onEnter() {
-  ActivityWithSubactivity::onEnter();
+  Activity::onEnter();
   if (!txt) return;
 
   switch (SETTINGS.orientation) {
@@ -266,7 +266,7 @@ void MdReaderActivity::onEnter() {
 }
 
 void MdReaderActivity::onExit() {
-  ActivityWithSubactivity::onExit();
+  Activity::onExit();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
   pageOffsets.clear();
   pageCodeFences.clear();
@@ -277,17 +277,12 @@ void MdReaderActivity::onExit() {
 }
 
 void MdReaderActivity::loop() {
-  if (subActivity) {
-    subActivity->loop();
-    return;
-  }
-
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= goHomeMs) {
-    onGoBack();
+    onGoHome();
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) && mappedInput.getHeldTime() < goHomeMs) {
-    onGoHome();
+    finish();
     return;
   }
 
@@ -330,16 +325,8 @@ void MdReaderActivity::initializeReader() {
   orientedMarginTop += cachedScreenMargin;
   orientedMarginLeft += cachedScreenMargin;
   orientedMarginRight += cachedScreenMargin;
-  orientedMarginBottom += cachedScreenMargin;
-
-  auto metrics = UITheme::getInstance().getMetrics();
-  if (SETTINGS.statusBar != CrossPointSettings::STATUS_BAR_MODE::NONE) {
-    const bool showProgressBar = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::BOOK_PROGRESS_BAR ||
-                                 SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::ONLY_BOOK_PROGRESS_BAR ||
-                                 SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
-    orientedMarginBottom += statusBarMargin - cachedScreenMargin +
-                            (showProgressBar ? (metrics.bookProgressBarHeight + progressBarMarginTop) : 0);
-  }
+  orientedMarginBottom +=
+      std::max(cachedScreenMargin, static_cast<int>(UITheme::getInstance().getStatusBarHeight()));
 
   viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
   const int viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
@@ -491,7 +478,7 @@ bool MdReaderActivity::loadPageAtOffset(size_t offset, std::vector<MdLine>& outL
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
-void MdReaderActivity::render(Activity::RenderLock&&) {
+void MdReaderActivity::render(RenderLock&&) {
   if (!txt) return;
   if (!initialized) initializeReader();
 

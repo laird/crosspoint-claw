@@ -11,6 +11,7 @@
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
 #include "OtaUpdateActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "SettingsList.h"
 #include "StatusBarSettingsActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
@@ -53,6 +54,11 @@ void SettingsActivity::onEnter() {
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
+
+  // Danger Zone: toggle + password entry (device-only)
+  systemSettings.push_back(SettingInfo::Toggle(StrId::STR_DANGER_ZONE, &CrossPointSettings::dangerZoneEnabled, nullptr,
+                                               StrId::STR_CAT_SYSTEM));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_DANGER_ZONE_PASSWORD, SettingAction::DangerZonePassword));
   readerSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
 
   // Reset selection to first category
@@ -196,6 +202,19 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);
         break;
+      case SettingAction::DangerZonePassword:
+        startActivityForResult(
+            std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_DANGER_ZONE_PASSWORD),
+                                                    std::string(SETTINGS.dangerZonePassword),
+                                                    sizeof(SETTINGS.dangerZonePassword) - 1, true),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                const auto& kbd = std::get<KeyboardResult>(result.data);
+                snprintf(SETTINGS.dangerZonePassword, sizeof(SETTINGS.dangerZonePassword), "%s", kbd.text.c_str());
+                SETTINGS.saveToFile();
+              }
+            });
+        break;
       case SettingAction::None:
         // Do nothing
         break;
@@ -247,9 +266,11 @@ void SettingsActivity::render(RenderLock&&) {
         } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
           valueText = std::to_string(SETTINGS.*(setting.valuePtr));
         } else if (setting.type == SettingType::ACTION) {
-          // Show current language name for Language action; chevron for all actions
+          // Show current language name for Language action; password status for DZ; chevron for rest
           if (setting.action == SettingAction::Language) {
             valueText = std::string(I18N.getLanguageName(I18N.getLanguage())) + "  ›";
+          } else if (setting.action == SettingAction::DangerZonePassword) {
+            valueText = (SETTINGS.dangerZonePassword[0] != '\0') ? "****  ›" : std::string(tr(STR_NOT_SET)) + "  ›";
           } else {
             valueText = "›";
           }

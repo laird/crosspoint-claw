@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "CrossPointSettings.h"
-#include "activities/ActivityWithSubactivity.h"
+#include "activities/Activity.h"
 
 struct MdLine {
   std::string text;
@@ -16,15 +16,12 @@ struct MdLine {
   bool isHRule = false;  // draw a horizontal rule instead of text
 };
 
-class MdReaderActivity final : public ActivityWithSubactivity {
+class MdReaderActivity final : public Activity {
   std::unique_ptr<Txt> txt;
 
   int currentPage = 0;
   int totalPages = 1;
   int pagesUntilFullRefresh = 0;
-
-  const std::function<void()> onGoBack;
-  const std::function<void()> onGoHome;
 
   // Streaming reader — stores file byte offsets and code-fence state for each page start.
   std::vector<size_t> pageOffsets;
@@ -52,14 +49,11 @@ class MdReaderActivity final : public ActivityWithSubactivity {
   void loadProgress();
 
  public:
-  explicit MdReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Txt> txt,
-                            const std::function<void()>& onGoBack, const std::function<void()>& onGoHome)
-      : ActivityWithSubactivity("MdReader", renderer, mappedInput),
-        txt(std::move(txt)),
-        onGoBack(onGoBack),
-        onGoHome(onGoHome) {}
+  explicit MdReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Txt> txt)
+      : Activity("MdReader", renderer, mappedInput),
+        txt(std::move(txt)) {}
   void onEnter() override;
   void onExit() override;
   void loop() override;
-  void render(Activity::RenderLock&&) override;
+  void render(RenderLock&&) override;
 };

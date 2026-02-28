@@ -165,12 +165,17 @@ void CrossPointWebServer::begin() {
   // Feed sync trigger
   server->on("/api/feed/sync", HTTP_POST, [this] { handlePostFeedSync(); });
 
+  // Danger Zone endpoints
+  server->on("/api/reboot", HTTP_POST, [this] { handlePostReboot(); });
+  server->on("/api/danger-zone/status", HTTP_GET, [this] { handleGetDangerZoneStatus(); });
+
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
 
-  // Collect WebDAV headers and register handler
-  const char* davHeaders[] = {"Depth", "Destination", "Overwrite", "If", "Lock-Token", "Timeout"};
-  server->collectHeaders(davHeaders, 6);
+  // Collect WebDAV headers and Danger Zone auth header
+  const char* davHeaders[] = {"Depth", "Destination", "Overwrite", "If", "Lock-Token", "Timeout",
+                               "X-Danger-Zone-Password"};
+  server->collectHeaders(davHeaders, 7);
   server->addHandler(new WebDAVHandler());  // Note: WebDAVHandler will be deleted by WebServer when server is stopped
   LOG_DBG("WEB", "WebDAV handler initialized");
 
@@ -1436,4 +1441,39 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
     default:
       break;
   }
+}
+
+// ─── Danger Zone ──────────────────────────────────────────────────────────────
+
+bool CrossPointWebServer::checkDangerZoneAuth() const {
+  if (!SETTINGS.dangerZoneEnabled) return false;
+  if (SETTINGS.dangerZonePassword[0] == '\0') return false;
+
+  // Check X-Danger-Zone-Password header first, then ?password= query param
+  String pw;
+  if (server->hasHeader("X-Danger-Zone-Password")) {
+    pw = server->header("X-Danger-Zone-Password");
+  } else if (server->hasArg("password")) {
+    pw = server->arg("password");
+  }
+  return pw.length() > 0 && pw == SETTINGS.dangerZonePassword;
+}
+
+void CrossPointWebServer::handlePostReboot() {
+  if (!checkDangerZoneAuth()) {
+    server->send(403, "text/plain", "Forbidden: Danger Zone not enabled or bad password");
+    return;
+  }
+  server->send(200, "text/plain", "Rebooting...");
+  delay(200);  // Allow response to be sent
+  SETTINGS.saveToFile();
+  ESP.restart();
+}
+
+void CrossPointWebServer::handleGetDangerZoneStatus() const {
+  char buf[128];
+  snprintf(buf, sizeof(buf), "{\"enabled\":%s,\"passwordSet\":%s}",
+           SETTINGS.dangerZoneEnabled ? "true" : "false",
+           (SETTINGS.dangerZonePassword[0] != '\0') ? "true" : "false");
+  server->send(200, "application/json", buf);
 }

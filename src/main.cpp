@@ -32,19 +32,27 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "activities/reader/ReaderActivity.h"
-#include "activities/settings/SettingsActivity.h"
 #include "activities/util/FullScreenMessageActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
 #include "util/ScreenCapture.h"
+#include "WifiCredentialStore.h"
+#include "network/CrossPointWebServer.h"
+#include "network/RssFeedSync.h"
+#include <WiFi.h>
+#include <ESPmDNS.h>
 
 HalDisplay display;
 HalGPIO gpio;
 MappedInputManager mappedInputManager(gpio);
 GfxRenderer renderer(display);
 ActivityManager activityManager(renderer, mappedInputManager);
+
+// Danger Zone: background web server (lives outside activity lifecycle)
+static std::unique_ptr<CrossPointWebServer> dzWebServer;
+static bool dzWifiConnected = false;
 FontDecompressor fontDecompressor;
 
 // Fonts
@@ -201,6 +209,18 @@ void waitForPowerRelease() {
 // Enter deep sleep mode
 void enterDeepSleep() {
   HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
+
+  // Shut down Danger Zone background web server if running
+  if (dzWebServer) {
+    dzWebServer->stop();
+    dzWebServer.reset();
+    dzWifiConnected = false;
+    UITheme::setHttpServerActive(false);
+    UITheme::setNetworkStatus(false, false);
+    WiFi.disconnect(false);
+    WiFi.mode(WIFI_OFF);
+  }
+
   APP_STATE.lastSleepFromReader = activityManager.isReaderActivity();
   APP_STATE.saveToFile();
 
@@ -245,6 +265,69 @@ void setupDisplayAndFonts() {
   renderer.insertFont(PULSR_10_FONT_ID, pulsr10FontFamily);
   renderer.insertFont(PULSR_12_FONT_ID, pulsr12FontFamily);
   LOG_DBG("MAIN", "Fonts setup");
+}
+
+// Danger Zone: attempt auto-connect to last known WiFi, start web server + feed sync.
+// Non-blocking: returns quickly regardless of outcome. Logs result.
+void dangerZoneAutoConnect() {
+  if (!SETTINGS.dangerZoneEnabled) return;
+  if (SETTINGS.dangerZonePassword[0] == '\0') {
+    LOG_DBG("DZ", "Danger Zone enabled but no password set — skipping auto-connect");
+    return;
+  }
+
+  WIFI_STORE.loadFromFile();
+  const auto& lastSsid = WIFI_STORE.getLastConnectedSsid();
+  if (lastSsid.empty()) {
+    LOG_DBG("DZ", "No last connected SSID — skipping auto-connect");
+    return;
+  }
+
+  const auto* cred = WIFI_STORE.findCredential(lastSsid);
+  if (!cred) {
+    LOG_DBG("DZ", "No saved password for '%s' — skipping", lastSsid.c_str());
+    return;
+  }
+
+  LOG_INF("DZ", "Auto-connecting to '%s'...", lastSsid.c_str());
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.begin(cred->ssid.c_str(), cred->password.c_str());
+
+  // Block up to 15 seconds for connection
+  constexpr unsigned long TIMEOUT_MS = 15000;
+  const unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < TIMEOUT_MS) {
+    delay(100);
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    LOG_ERR("DZ", "Auto-connect failed (status=%d)", WiFi.status());
+    WiFi.mode(WIFI_OFF);
+    return;
+  }
+
+  dzWifiConnected = true;
+  LOG_INF("DZ", "Connected! IP=%s", WiFi.localIP().toString().c_str());
+
+  UITheme::setNetworkStatus(true, false);
+
+  // Start mDNS
+  MDNS.begin("crosspoint");
+
+  // Start web server
+  dzWebServer.reset(new CrossPointWebServer());
+  dzWebServer->begin();
+  if (dzWebServer->isRunning()) {
+    UITheme::setHttpServerActive(true);
+    LOG_INF("DZ", "Web server started on port 80");
+  } else {
+    LOG_ERR("DZ", "Web server failed to start");
+    dzWebServer.reset();
+  }
+
+  // Start RSS feed sync
+  RssFeedSync::startSync();
 }
 
 void setup() {
@@ -383,7 +466,16 @@ void setup() {
             drawUpdateScreen(pct);
           }
         });
-        const size_t written = Update.writeStream(firmwareFile);
+        // HalFile is Print-only (not Stream), so read+write in chunks
+        size_t written = 0;
+        uint8_t buf[512];
+        while (written < fileSize) {
+          const int bytesRead = firmwareFile.read(buf, sizeof(buf));
+          if (bytesRead <= 0) break;
+          const size_t bytesWritten = Update.write(buf, bytesRead);
+          if (bytesWritten != static_cast<size_t>(bytesRead)) break;
+          written += bytesWritten;
+        }
         firmwareFile.close();
         if (written == fileSize && Update.end()) {
           if (!Storage.remove("/firmware.bin")) {
@@ -432,6 +524,9 @@ void setup() {
     APP_STATE.saveToFile();
     activityManager.goToReader(path);
   }
+
+  // Danger Zone: auto-connect WiFi + start web server + feed sync
+  dangerZoneAutoConnect();
 
   // Ensure we're not still holding the power button before leaving setup
   waitForPowerRelease();
@@ -579,6 +674,11 @@ void loop() {
   const unsigned long activityStartTime = millis();
   activityManager.loop();
   const unsigned long activityDuration = millis() - activityStartTime;
+
+  // Danger Zone: service background web server when running outside CrossPointWebServerActivity
+  if (dzWebServer && dzWebServer->isRunning()) {
+    dzWebServer->handleClient();
+  }
 
   const unsigned long loopDuration = millis() - loopStartTime;
   if (loopDuration > maxLoopDuration) {

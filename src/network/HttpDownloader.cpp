@@ -78,43 +78,17 @@ bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent) {
   }
 
   const int httpCode = http.GET();
-  LOG_DBG("HTTP", "HTTP response code: %d for %s", httpCode, url.c_str());
   if (httpCode != HTTP_CODE_OK) {
-    LOG_ERR("HTTP", "Fetch failed with code: %d for URL: %s", httpCode, url.c_str());
+    LOG_ERR("HTTP", "Fetch failed: %d", httpCode);
     http.end();
     return false;
   }
 
-  // Stream response into outContent using a fixed-size stack buffer.
-  // This ensures arbitrarily large responses never require heap allocation
-  // proportional to response size — we process each chunk as it arrives.
-  WiFiClient* stream = http.getStreamPtr();
-  if (!stream) {
-    LOG_ERR("HTTP", "No stream for %s", url.c_str());
-    http.end();
-    return false;
-  }
-  constexpr size_t CHUNK = 512;
-  uint8_t buf[CHUNK];
-  int total = 0;
-  const unsigned long fetchStart = millis();
-  constexpr unsigned long FETCH_TIMEOUT_MS = 30000;
-  while (http.connected()) {
-    if (millis() - fetchStart > FETCH_TIMEOUT_MS) {
-      LOG_ERR("HTTP", "Fetch timeout for %s", url.c_str());
-      http.end();
-      return false;
-    }
-    const size_t avail = stream->available();
-    if (avail == 0) { delay(1); continue; }
-    const size_t toRead = avail < CHUNK ? avail : CHUNK;
-    const size_t n = stream->readBytes(buf, toRead);
-    if (n == 0) break;
-    outContent.write(buf, n);
-    total += (int)n;
-  }
+  http.writeToStream(&outContent);
+
   http.end();
-  LOG_DBG("HTTP", "Fetch complete (%d bytes): %s", total, url.c_str());
+
+  LOG_DBG("HTTP", "Fetch success");
   return true;
 }
 
@@ -185,57 +159,6 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   // Let HTTPClient handle chunked decoding and stream body bytes into the file.
   FileWriteStream fileStream(file, contentLength, progress);
   const int writeResult = http.writeToStream(&fileStream);
-  // Get the stream for chunked reading
-  WiFiClient* stream = http.getStreamPtr();
-  if (!stream) {
-    LOG_ERR("HTTP", "Failed to get stream");
-    file.close();
-    Storage.remove(destPath.c_str());
-    http.end();
-    return HTTP_ERROR;
-  }
-
-  // Download in chunks
-  uint8_t buffer[DOWNLOAD_CHUNK_SIZE];
-  size_t downloaded = 0;
-  const size_t total = contentLength > 0 ? contentLength : 0;
-
-  const unsigned long dlStart = millis();
-  constexpr unsigned long DL_TIMEOUT_MS = 30000;  // 30s max per file
-  while (http.connected() && (contentLength == 0 || downloaded < contentLength)) {
-    if (millis() - dlStart > DL_TIMEOUT_MS) {
-      LOG_ERR("HTTP", "Download timeout after 30s: %s", url.c_str());
-      http.end();
-      return HttpDownloader::HTTP_ERROR;
-    }
-    const size_t available = stream->available();
-    if (available == 0) {
-      delay(1);
-      continue;
-    }
-
-    const size_t toRead = available < DOWNLOAD_CHUNK_SIZE ? available : DOWNLOAD_CHUNK_SIZE;
-    const size_t bytesRead = stream->readBytes(buffer, toRead);
-
-    if (bytesRead == 0) {
-      break;
-    }
-
-    const size_t written = file.write(buffer, bytesRead);
-    if (written != bytesRead) {
-      LOG_ERR("HTTP", "Write failed: wrote %zu of %zu bytes", written, bytesRead);
-      file.close();
-      Storage.remove(destPath.c_str());
-      http.end();
-      return FILE_ERROR;
-    }
-
-    downloaded += bytesRead;
-
-    if (progress && total > 0) {
-      progress(downloaded, total);
-    }
-  }
 
   file.close();
   http.end();
