@@ -388,8 +388,12 @@ void setup() {
         while (written < fileSize) {
           const int bytesRead = firmwareFile.read(buf, sizeof(buf));
           if (bytesRead <= 0) break;
-          Update.write(buf, bytesRead);
-          written += bytesRead;
+          const size_t updateWritten = Update.write(buf, bytesRead);
+          if (updateWritten != (size_t)bytesRead) {
+            LOG_ERR("MAIN", "Update.write short: %u read, %u written", bytesRead, updateWritten);
+            break;
+          }
+          written += updateWritten;
         }
         firmwareFile.close();
         if (written == fileSize && Update.end()) {
@@ -401,11 +405,11 @@ void setup() {
         } else {
           const char* updateErr = Update.errorString();  // capture BEFORE abort clears it
           Update.abort();
-          char errMsg[80];
+          char errMsg[96];
           if (written != fileSize) {
-            snprintf(errMsg, sizeof(errMsg), "short write %u/%u: %s", (unsigned)written, (unsigned)fileSize, updateErr);
+            snprintf(errMsg, sizeof(errMsg), "short write %u/%u", (unsigned)written, (unsigned)fileSize);
           } else {
-            snprintf(errMsg, sizeof(errMsg), "finalize failed: %s", updateErr);
+            snprintf(errMsg, sizeof(errMsg), "end() failed: %s (wrote %u)", updateErr, (unsigned)written);
           }
           LOG_ERR("MAIN", "Firmware update failed: %s", errMsg);
           showError(errMsg, fileSize, written);
