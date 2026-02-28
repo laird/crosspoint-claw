@@ -208,13 +208,10 @@ class CrossPointSettings {
   }
   int getReaderFontId() const;
 
-  // If count_only is true, returns the number of settings items that would be written.
-  uint8_t writeSettings(FsFile& file, bool count_only = false) const;
+  static void validateFrontButtonMapping(CrossPointSettings& settings);
 
   bool saveToFile() const;
   bool loadFromFile();
-
-  static void validateFrontButtonMapping(CrossPointSettings& settings);
 
  private:
   bool loadFromBinaryFile();

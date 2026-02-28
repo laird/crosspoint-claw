@@ -506,12 +506,11 @@ void runScreenshotTour() {
 
   exitActivity();
   // false = no auto-connect, so we stay in SCANNING state for the capture
-  enterNewActivity(new WifiSelectionActivity(renderer, mappedInputManager, [](bool) {}, false));
+  enterNewActivity(new WifiSelectionActivity(renderer, mappedInputManager, false));
   captureStep("wifi_scan");
 
   exitActivity();
-  enterNewActivity(new KeyboardEntryActivity(renderer, mappedInputManager, "WIFI PASSWORD", "", 64,
-                                             true, nullptr, nullptr));
+  enterNewActivity(new KeyboardEntryActivity(renderer, mappedInputManager, "WIFI PASSWORD", "", 64, true));
   captureStep("keyboard");
 
   onGoHome();
@@ -580,11 +579,6 @@ void loop() {
     return;
   }
 
-  if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
-    // If the screenshot combination is potentially being pressed, don't sleep
-    if (gpio.isPressed(HalGPIO::BTN_DOWN)) {
-      return;
-    }
   // Screenshot tour combo: Power + Confirm held 1.5 s
   {
     static unsigned long screenshotHoldStart = 0;
@@ -603,9 +597,11 @@ void loop() {
     }
   }
 
-  // Power-only hold triggers deep sleep; skip if Confirm is also held (screenshot combo)
-  if (gpio.isPressed(HalGPIO::BTN_POWER) && !gpio.isPressed(HalGPIO::BTN_CONFIRM) &&
-      gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
+  if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
+    // If a screenshot combination is being pressed, don't sleep
+    if (gpio.isPressed(HalGPIO::BTN_DOWN) || gpio.isPressed(HalGPIO::BTN_CONFIRM)) {
+      return;
+    }
     enterDeepSleep();
     // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
     return;

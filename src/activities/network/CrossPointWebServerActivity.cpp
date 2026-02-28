@@ -28,11 +28,6 @@ constexpr uint8_t AP_CHANNEL = 1;
 constexpr uint8_t AP_MAX_CONNECTIONS = 4;
 constexpr int QR_CODE_WIDTH = 198;
 constexpr int QR_CODE_HEIGHT = 198;
-constexpr int QR_MODULE_PX = 6;               // pixels per QR module
-constexpr int QR_MODULES = 33;               // version 4 QR code = 33×33 modules
-constexpr int QR_PADDING = 16;               // quiet-zone padding each side (≥4 modules per QR spec)
-constexpr int QR_CODE_WIDTH = QR_MODULE_PX * QR_MODULES + 2 * QR_PADDING;   // 230
-constexpr int QR_CODE_HEIGHT = QR_MODULE_PX * QR_MODULES + 2 * QR_PADDING;  // 230
 
 // DNS server for captive portal (redirects all DNS queries to our IP)
 DNSServer* dnsServer = nullptr;
@@ -429,29 +424,6 @@ void CrossPointWebServerActivity::render(RenderLock&&) {
   }
 }
 
-void drawQRCode(const GfxRenderer& renderer, const int x, const int y, const std::string& data) {
-  QRCode qrcode;
-  uint8_t qrcodeBytes[qrcode_getBufferSize(4)];
-  LOG_DBG("WEBACT", "QR Code (%lu): %s", data.length(), data.c_str());
-
-  qrcode_initText(&qrcode, qrcodeBytes, 4, ECC_LOW, data.c_str());
-
-  // Erase the full bounding box (including quiet zone) to guarantee white background.
-  // (x, y) is the outer top-left including QR_PADDING on all sides.
-  renderer.fillRect(x, y, qrcode.size * QR_MODULE_PX + 2 * QR_PADDING,
-                    qrcode.size * QR_MODULE_PX + 2 * QR_PADDING, false);
-
-  // Draw QR modules offset inward by the quiet-zone padding.
-  for (uint8_t cy = 0; cy < qrcode.size; cy++) {
-    for (uint8_t cx = 0; cx < qrcode.size; cx++) {
-      if (qrcode_getModule(&qrcode, cx, cy)) {
-        renderer.fillRect(x + QR_PADDING + QR_MODULE_PX * cx, y + QR_PADDING + QR_MODULE_PX * cy,
-                          QR_MODULE_PX, QR_MODULE_PX, true);
-      }
-    }
-  }
-}
-
 void CrossPointWebServerActivity::renderServerRunning() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
@@ -475,11 +447,9 @@ void CrossPointWebServerActivity::renderServerRunning() const {
                     connectedSSID.c_str());
 
   int startY = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing * 2;
-  int height10 = renderer.getLineHeight(PULSR_10_FONT_ID);
   // Center QR codes and text within the content area (to the right of any left bar)
   const int contentLeft = metrics.contentSidePadding;
   const int contentW    = pageWidth - contentLeft;
-  const int qrX = contentLeft + (contentW - QR_CODE_WIDTH) / 2;
 
   // Draw centered text within the content area, wrapping to two lines if needed.
   // Returns the total pixel height consumed (one or two lines).
@@ -523,7 +493,6 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     const std::string wifiConfig = std::string("WIFI:S:") + connectedSSID + ";;";
     const Rect qrBoundsWifi(metrics.contentSidePadding, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBoundsWifi, wifiConfig);
-    drawQRCode(renderer, qrX, startY, wifiConfig);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
     startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, connectedSSID.c_str(), true);
@@ -539,7 +508,6 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     // Show QR code for URL
     const Rect qrBoundsUrl(metrics.contentSidePadding, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBoundsUrl, hostnameUrl);
-    drawQRCode(renderer, qrX, startY, hostnameUrl);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
     startY += drawCenteredWrapped(PULSR_12_FONT_ID, startY, hostnameUrl.c_str(), true);
@@ -570,8 +538,6 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     const Rect qrBounds((pageWidth - QR_CODE_WIDTH) / 2, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBounds, webInfo);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing * 2;
-    drawQRCode(renderer, qrX, startY, webInfo);
-    startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
     startY += drawCenteredWrapped(PULSR_12_FONT_ID, startY, webInfo.c_str(), true);
     startY += metrics.verticalSpacing;
