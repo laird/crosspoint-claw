@@ -112,4 +112,7 @@ class CrossPointWebServer {
   // Feed URL handlers
   void handleGetFeedUrl() const;
   void handlePostFeedUrl();
+
+  // Feed sync trigger
+  void handlePostFeedSync() const;
 };

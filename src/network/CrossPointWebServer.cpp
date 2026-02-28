@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "CrossPointSettings.h"
+#include "RssFeedSync.h"
 #include "SettingsList.h"
 #include "WebDAVHandler.h"
 #include "html/FilesPageHtml.generated.h"
@@ -160,6 +161,9 @@ void CrossPointWebServer::begin() {
   // Feed URL endpoint
   server->on("/api/feed-url", HTTP_GET, [this] { handleGetFeedUrl(); });
   server->on("/api/feed-url", HTTP_POST, [this] { handlePostFeedUrl(); });
+
+  // Feed sync trigger
+  server->on("/api/feed/sync", HTTP_POST, [this] { handlePostFeedSync(); });
 
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
@@ -1277,6 +1281,11 @@ void CrossPointWebServer::handlePostFeedUrl() {
 
   SETTINGS.saveToFile();
   server->send(200, "text/plain", "Feed settings updated");
+}
+
+void CrossPointWebServer::handlePostFeedSync() const {
+  RssFeedSync::startSync();
+  server->send(200, "text/plain", "Feed sync triggered");
 }
 
 // WebSocket callback trampoline

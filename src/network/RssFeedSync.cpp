@@ -371,6 +371,13 @@ void syncTask(void*) {
   LOG_INF(TAG, "Feed sync started");
   setState(RssFeedSync::State::FETCHING);
 
+  // Wait for WiFi stack to be fully routed. WL_CONNECTED can fire before
+  // DHCP/DNS/default-route are ready, causing immediate TCP failures.
+  for (int attempt = 0; attempt < 10; attempt++) {
+    if (WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) break;
+    vTaskDelay(pdMS_TO_TICKS(300));
+  }
+
   const std::string feedUrl = SETTINGS.feedUrl;
   LOG_INF(TAG, "Feed URL: %s", feedUrl.c_str());
 
@@ -463,7 +470,6 @@ void syncTask(void*) {
     LOG_INF(TAG, "Starting feed fetch...");
     setState(RssFeedSync::State::PARSING);
     if (!HttpDownloader::fetchUrl(feedUrl, stream)) {
-      LOG_ERR(TAG, "Failed to fetch feed: %s", feedUrl.c_str());
       LOG_ERR(TAG, "FETCH FAILED url=%s heap=%lu", feedUrl.c_str(), (unsigned long)ESP.getFreeHeap());
       setState(RssFeedSync::State::ERROR);
       syncTaskHandle = nullptr;

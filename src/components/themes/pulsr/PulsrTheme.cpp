@@ -93,12 +93,13 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     constexpr int SEG_MARGIN = 6;   // inset for pills/labels within each segment
     constexpr int PILL_R     = 5;   // pill corner radius
     constexpr int PILL_GAP   = 3;   // gap between stacked pills
+    constexpr int PILL_LEFT  = 5;   // extra left inset so rounded corners aren't clipped
     const int zoneTop    = NAV_GAP + 4;
     const int zoneBottom = H - NAV_GAP - 4;
     const int zoneH      = zoneBottom - zoneTop;
     const int segH       = zoneH / NUM_SEGS;
-    const int pillW      = LEFT_W - SEG_MARGIN * 2;
-    const int pillX      = SEG_MARGIN;
+    const int pillW      = LEFT_W - SEG_MARGIN - (SEG_MARGIN + PILL_LEFT);
+    const int pillX      = SEG_MARGIN + PILL_LEFT;
 
     // ── Separator lines between segments ──────────────────────────────────────
     for (int i = 1; i < NUM_SEGS; i++) {
@@ -701,7 +702,7 @@ void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t 
 void PulsrTheme::drawReadingProgressBar(const GfxRenderer& renderer,
                                          const size_t bookProgress) const {
   const int contentW = renderer.getScreenWidth() - LEFT_W;
-  const int barH     = Lm::values.bookProgressBarHeight;
+  const int barH     = Lm::values.progressBarHeight;
   const int barY     = TOP_H;  // immediately below the top bar
   const int fillW    = contentW * static_cast<int>(bookProgress) / 100;
   if (fillW > 0) {
