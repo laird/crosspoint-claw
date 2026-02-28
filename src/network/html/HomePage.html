@@ -104,6 +104,7 @@
       <a href="/" class="active">Home</a>
       <a href="/files">File Manager</a>
       <a href="/settings">Settings</a>
+    <a href="/danger-zone" id="dz-nav" style="display:none">Danger Zone</a>
     </div>
 
     <div class="card">
@@ -289,5 +290,11 @@
     // Fetch status on page load
     window.onload = () => { fetchStatus(); checkFeedUrl(); checkFirmware(); checkDangerZone(); };
   </script>
-  </body>
+  <script>
+(function(){fetch('/api/status').then(r=>r.json()).then(d=>{
+  if(d.dangerZoneEnabled===true||d.dangerZoneEnabled===1)
+    document.getElementById('dz-nav').style.display='';
+}).catch(()=>{});})();
+</script>
+</body>
 </html>

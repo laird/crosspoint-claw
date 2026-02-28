@@ -16,6 +16,7 @@
 #include "html/FilesPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
+#include "html/DangerZonePageHtml.generated.h"
 #include "util/StringUtils.h"
 
 namespace {
@@ -155,6 +156,7 @@ void CrossPointWebServer::begin() {
 
   // Settings endpoints
   server->on("/settings", HTTP_GET, [this] { handleSettingsPage(); });
+  server->on("/danger-zone", HTTP_GET, [this] { handleDangerZonePage(); });
   server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
   server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
 
@@ -1140,6 +1142,11 @@ void CrossPointWebServer::handleDelete() const {
 void CrossPointWebServer::handleSettingsPage() const {
   sendHtmlContent(server.get(), SettingsPageHtml, sizeof(SettingsPageHtml));
   LOG_DBG("WEB", "Served settings page");
+}
+
+void CrossPointWebServer::handleDangerZonePage() const {
+  sendHtmlContent(server.get(), DangerZonePageHtml, sizeof(DangerZonePageHtml));
+  LOG_DBG("WEB", "Served danger zone page");
 }
 
 void CrossPointWebServer::handleGetSettings() const {

@@ -107,6 +107,7 @@ class CrossPointWebServer {
 
   // Settings handlers
   void handleSettingsPage() const;
+  void handleDangerZonePage() const;
   void handleGetSettings() const;
   void handlePostSettings();
 

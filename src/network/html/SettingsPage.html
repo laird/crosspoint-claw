@@ -243,6 +243,7 @@
     <a href="/">Home</a>
     <a href="/files">File Manager</a>
     <a href="/settings" class="active">Settings</a>
+    <a href="/danger-zone" id="dz-nav" style="display:none">Danger Zone</a>
   </div>
 
   <div id="message" class="message"></div>
@@ -434,19 +435,6 @@
     btn.textContent = 'Save Settings';
   }
 
-
-  async function loadDangerZoneStatus() {
-    try {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      const enabled = data.dangerZoneEnabled === true || data.dangerZoneEnabled === 1;
-      document.getElementById('dz-card').style.display = enabled ? '' : 'none';
-      document.getElementById('dz-status').textContent = '✅ Enabled';
-      document.getElementById('dz-status').style.color = '#27ae60';
-      document.getElementById('dz-actions').style.display = '';
-    } catch(e) {
-      document.getElementById('dz-status').textContent = 'Unknown';
-    }
   }
 
   async function dzReboot() {
@@ -480,17 +468,7 @@
   }
 
   loadSettings();
-  loadDangerZoneStatus();
 </script>
-
-<!-- Danger Zone Tab -->
-<div id="dz-card" class="card" style="border: 2px solid #e74c3c; margin-top: 24px; display:none">
-  <h2 style="color:#e74c3c;">🔴 Danger Zone</h2>
-  <p style="color:#888;font-size:13px;margin:0 0 12px">These controls require your Danger Zone password. Enable/disable Danger Zone mode from the device settings UI.</p>
-  <div class="setting-row">
-    <span class="setting-name">Status</span>
-    <span class="setting-control"><b id="dz-status">Checking…</b></span>
-  </div>
   <div class="setting-row" style="margin-top:8px">
     <span class="setting-name">Password</span>
     <span class="setting-control"><input type="password" id="dz-password" placeholder="Danger Zone password" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;width:180px"></span>
@@ -501,5 +479,11 @@
     <button onclick="dzReboot()" style="background:#e74c3c;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer">🔁 Reboot</button>
   </div>
 </div>
+<script>
+(function(){fetch('/api/status').then(r=>r.json()).then(d=>{
+  if(d.dangerZoneEnabled===true||d.dangerZoneEnabled===1)
+    document.getElementById('dz-nav').style.display='';
+}).catch(()=>{});})();
+</script>
 </body>
 </html>
