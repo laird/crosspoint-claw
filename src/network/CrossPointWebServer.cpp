@@ -168,6 +168,7 @@ void CrossPointWebServer::begin() {
   // Danger Zone endpoints
   server->on("/api/reboot", HTTP_POST, [this] { handlePostReboot(); });
   server->on("/api/danger-zone/status", HTTP_GET, [this] { handleGetDangerZoneStatus(); });
+  server->on("/api/screenshot-tour", HTTP_POST, [this] { handlePostScreenshotTour(); });
 
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
@@ -1445,6 +1446,9 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
 
 // ─── Danger Zone ──────────────────────────────────────────────────────────────
 
+// Flag checked by main loop to trigger screenshot tour (defined in main.cpp)
+extern volatile bool dzScreenshotTourRequested;
+
 bool CrossPointWebServer::checkDangerZoneAuth() const {
   if (!SETTINGS.dangerZoneEnabled) return false;
   if (SETTINGS.dangerZonePassword[0] == '\0') return false;
@@ -1476,4 +1480,15 @@ void CrossPointWebServer::handleGetDangerZoneStatus() const {
            SETTINGS.dangerZoneEnabled ? "true" : "false",
            (SETTINGS.dangerZonePassword[0] != '\0') ? "true" : "false");
   server->send(200, "application/json", buf);
+}
+
+void CrossPointWebServer::handlePostScreenshotTour() {
+  if (!checkDangerZoneAuth()) {
+    server->send(403, "text/plain", "Forbidden: Danger Zone not enabled or bad password");
+    return;
+  }
+  // Signal the main loop to run the screenshot tour.  WiFi will be disconnected
+  // during the tour, so we respond immediately and let the main loop handle it.
+  dzScreenshotTourRequested = true;
+  server->send(200, "text/plain", "Screenshot tour starting. WiFi will reconnect when done.");
 }

@@ -53,6 +53,7 @@ ActivityManager activityManager(renderer, mappedInputManager);
 // Danger Zone: background web server (lives outside activity lifecycle)
 static std::unique_ptr<CrossPointWebServer> dzWebServer;
 static bool dzWifiConnected = false;
+volatile bool dzScreenshotTourRequested = false;
 FontDecompressor fontDecompressor;
 
 // Fonts
@@ -678,6 +679,31 @@ void loop() {
   // Danger Zone: service background web server when running outside CrossPointWebServerActivity
   if (dzWebServer && dzWebServer->isRunning()) {
     dzWebServer->handleClient();
+  }
+
+  // Danger Zone: handle screenshot tour request from API
+  if (dzScreenshotTourRequested) {
+    dzScreenshotTourRequested = false;
+
+    // Stop DZ web server and WiFi before the tour (tour changes activities)
+    if (dzWebServer) {
+      dzWebServer->stop();
+      dzWebServer.reset();
+      UITheme::setHttpServerActive(false);
+    }
+    UITheme::setNetworkStatus(false, false);
+    WiFi.disconnect(false);
+    WiFi.mode(WIFI_OFF);
+    dzWifiConnected = false;
+
+    // Run the screenshot tour (skipping WiFi/network activities)
+    runScreenshotTour();
+
+    // Auto-reconnect WiFi and restart web server
+    dangerZoneAutoConnect();
+
+    // Return to home screen
+    activityManager.goHome();
   }
 
   const unsigned long loopDuration = millis() - loopStartTime;

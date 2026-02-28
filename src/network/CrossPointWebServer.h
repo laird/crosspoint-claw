@@ -119,6 +119,7 @@ class CrossPointWebServer {
   // Danger Zone endpoints
   void handlePostReboot();
   void handleGetDangerZoneStatus() const;
+  void handlePostScreenshotTour();
 
   // Check Danger Zone password from request header or query param
   bool checkDangerZoneAuth() const;
