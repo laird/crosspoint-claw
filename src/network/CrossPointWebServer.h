@@ -112,18 +112,4 @@ class CrossPointWebServer {
   // Feed URL handlers
   void handleGetFeedUrl() const;
   void handlePostFeedUrl();
-
-  // Feed sync trigger
-  void handlePostFeedSync() const;
-
-  // Danger Zone endpoints
-  void handlePostReboot();
-  void handleGetDangerZoneStatus() const;
-  void handlePostScreenshotTour();
-  void handlePostFlash();
-  void handleGetFirmwareStatus() const;
-  void handleGetLog(const char* path) const;
-
-  // Check Danger Zone password from request header or query param
-  bool checkDangerZoneAuth() const;
 };
