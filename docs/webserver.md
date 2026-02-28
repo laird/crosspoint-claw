@@ -233,3 +233,53 @@ Your uploaded files will be immediately available in the file browser!
 - [User Guide](../USER_GUIDE.md) - General device operation
 - [Troubleshooting](./troubleshooting.md) - Troubleshooting
 - [README](../README.md) - Project overview and features
+
+---
+
+## Danger Zone: Background Web Server
+
+The **Danger Zone** feature allows the web server to run automatically in the background — without entering WiFi mode manually. This is useful for scripted file transfers, automation, or push-based workflows (like the `push-epubs.py` script).
+
+### Setup (one-time, on device)
+
+1. Go to **Settings → SYST** tab
+2. Toggle **Danger Zone** ON
+3. Tap **Danger Zone Password** and set a password
+4. Exit settings — the device will auto-connect to your last known WiFi and start the web server in the background
+
+> ⚠️ **The web server will not start unless both the toggle is ON and a password is set.**
+
+### How It Works
+
+- On boot (and when returning from sleep/activity), the device auto-connects to WiFi and starts the web server
+- The server runs on port 80 in the background while you use the reader normally
+- All web API endpoints require the password via HTTP Basic Auth
+- The server stops automatically when Danger Zone is disabled or on shutdown
+
+### Security Notes
+
+- The password protects upload/delete endpoints from unauthorized access
+- Only use on trusted private networks — the connection is plain HTTP (no TLS)
+- The password is stored on the SD card; don't reuse sensitive passwords
+
+### Using the API with a Password
+
+Once Danger Zone is active, all requests must include the password via HTTP Basic Auth (any username works):
+
+```bash
+# Check status
+curl http://192.168.0.XXX/api/status -u "chip:YOUR_PASSWORD"
+
+# Upload a file
+curl -X POST "http://192.168.0.XXX/upload?path=/Books/chip/" \
+  -u "chip:YOUR_PASSWORD" \
+  -F "file=@mybook.epub"
+
+# Trigger feed sync
+curl -X POST http://192.168.0.XXX/api/feed/sync -u "chip:YOUR_PASSWORD"
+
+# Reboot device
+curl -X POST http://192.168.0.XXX/api/reboot -u "chip:YOUR_PASSWORD"
+```
+
+> 💡 Without the correct password, all endpoints return `403 Forbidden`.

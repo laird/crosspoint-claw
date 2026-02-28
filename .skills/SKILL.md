@@ -116,7 +116,7 @@ These flags in `platformio.ini` fundamentally affect firmware behavior:
 * lib/: Internal libraries (Epub engine, GfxRenderer, UITheme, I18n)
   * lib/hal/: Hardware Abstraction Layer (HalDisplay, HalGPIO, HalStorage)
   * lib/I18n/: Internationalization (translations in `translations/*.yaml`, generated string tables)
-* src/activities/: UI logic using the Activity Lifecycle (onEnter, loop, onExit)
+* src/activities/: UI logic using the Activity Lifecycle (onEnter, loop, onExit); `ActivityManager` is the navigation singleton
 * open-x4-sdk/: Low-level SDK (EInkDisplay, InputManager, BatteryMonitor, SDCardManager)
 * .crosspoint/: SD-based binary cache for EPUB metadata and pre-rendered layout sections
 
@@ -348,53 +348,86 @@ Constraint: Physical button positions are fixed on hardware, but their logical f
 #define GUI UITheme::getInstance()                   // Current theme
 #define Storage HalStorage::getInstance()            // SD card I/O
 #define I18N I18n::getInstance()                     // Internationalization
+// ActivityManager is accessed via the global `activityManager` variable (not a macro)
 ```
 
-### Activity Lifecycle and Memory Management
+### Activity Lifecycle and ActivityManager
 
-**Source**: [src/main.cpp:132-143](src/main.cpp)
+**Source**: [src/activities/ActivityManager.h](src/activities/ActivityManager.h), [docs/activity-manager.md](docs/activity-manager.md)
 
-**CRITICAL**: Activities are **heap-allocated** and **deleted on exit**.
+Navigation is handled by the **centralized `ActivityManager`** singleton (not free functions in `main.cpp`). It owns the single shared render task and manages an activity stack.
 
+**Navigation API**:
 ```cpp
-// main.cpp navigation pattern
-void exitActivity() {
-  if (currentActivity) {
-    currentActivity->onExit();
-    delete currentActivity;  // Activity deleted here!
-    currentActivity = nullptr;
-  }
-}
+// Replace/reset the stack to a new activity
+activityManager.goHome();
+activityManager.goToReader(path);   // path = absolute SD path to EPUB/TXT
 
-void enterNewActivity(Activity* activity) {
-  currentActivity = activity;  // Heap-allocated activity
-  currentActivity->onEnter();
-}
+// Push/pop on the activity stack (parent pauses while child is active)
+activityManager.pushActivity(std::make_unique<MyActivity>());
+activityManager.popActivity();      // returns to parent; if stack empty → goHome()
+
+// Launch a child and receive its result
+startActivityForResult(
+    std::make_unique<MyChildActivity>(),
+    [this](ActivityResult result) {
+        // called when child calls finish() or is popped
+    });
+
+// Inside the child activity:
+setResult(ActivityResult::ok(someValue));  // optional result data
+finish();                                   // triggers parent callback, pops child
 ```
 
-**Memory Implications**:
-- Activity navigation = `delete` old activity + `new` create next activity
+**Memory rules** (unchanged):
 - Any memory allocated in `onEnter()` MUST be freed in `onExit()`
-- FreeRTOS tasks MUST be deleted in `onExit()` before activity destruction
+- Background FreeRTOS tasks MUST be deleted in `onExit()` before activity destruction
 - File handles MUST be closed in `onExit()`
 
 **Activity Pattern**:
 ```cpp
-void onEnter()  { Activity::onEnter(); /* alloc: buffer, tasks */ render(); }
-void loop()     { mappedInput.update(); /* handle input */ }
-void onExit()   { /* free: vTaskDelete, free buffer, close files */ Activity::onExit(); }
+void onEnter()  { Activity::onEnter(); /* alloc */ requestUpdate(); }
+void loop()     { mappedInput.update(); /* handle input, call requestUpdate() */ }
+void onExit()   { /* free tasks, buffers, files */ Activity::onExit(); }
 ```
 
 **Critical**: Free resources in reverse order. Delete tasks BEFORE activity destruction.
+
+### RenderLock Pattern
+
+**Source**: [src/activities/RenderLock.h](src/activities/RenderLock.h)
+
+`ActivityManager` owns a single global FreeRTOS mutex that serializes `loop()` (main task) and `render()` (render task). Acquire it whenever `loop()` writes state that `render()` also reads.
+
+```cpp
+// In loop() — protect state writes that render() reads:
+{
+    RenderLock lock;
+    mySharedState = newValue;
+}  // mutex released at end of scope
+
+// In render() — the ActivityManager holds the lock before calling render(),
+// so no explicit locking is needed there.
+
+// To check without blocking (e.g., skip an expensive update if busy):
+if (RenderLock::peek()) { /* mutex is held */ }
+```
+
+**Rules**:
+- Never hold a `RenderLock` across a blocking call (SD I/O, network, vTaskDelay)
+- `render()` already runs under the lock — do NOT re-acquire inside render
+- The `RenderLock` constructor blocks until the mutex is free; prefer short critical sections
 
 ### FreeRTOS Task Guidelines
 
 **Source**: [src/activities/util/KeyboardEntryActivity.cpp:45-50](src/activities/util/KeyboardEntryActivity.cpp)
 
-**Pattern**: See Activity Lifecycle above. `xTaskCreate(&taskTrampoline, "Name", stackSize, this, 1, &handle)`
+**The render task is shared** — `ActivityManager` owns the single render task (8KB stack). Activities must NOT create their own render tasks. Background work tasks (e.g., network downloads) are fine.
+
+**Pattern**: `xTaskCreate(&taskTrampoline, "Name", stackSize, this, 1, &handle)`
 
 **Stack Sizing** (in BYTES, not words):
-- **2048**: Simple rendering (most activities)
+- **2048**: Simple background tasks
 - **4096**: Network, EPUB parsing
 - Monitor: `uxTaskGetStackHighWaterMark()` if crashes
 
