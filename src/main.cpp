@@ -376,7 +376,18 @@ void setup() {
                            (resetReason == ESP_RST_POWERON)  ? "poweron"  :
                            (resetReason == ESP_RST_DEEPSLEEP)? "deepsleep": "other";
     FsFile bootLog;
-    if (Storage.openFileForWrite("MAIN", "/boot.log", bootLog)) {
+    // Rotate log if over 2KB
+    {
+      FsFile check = Storage.open("/boot.log");
+      if (check && check.size() > 2048) {
+        check.close();
+        Storage.remove("/boot.log.bak");
+        Storage.rename("/boot.log", "/boot.log.bak");
+      } else if (check) {
+        check.close();
+      }
+    }
+    if ((bootLog = Storage.open("/boot.log", O_RDWR | O_CREAT | O_AT_END))) {
       char buf[160];
       snprintf(buf, sizeof(buf), "version=%s reset=%s heap=%u uptime=%lu\n",
                CROSSPOINT_VERSION, resetStr, ESP.getFreeHeap(), millis());
