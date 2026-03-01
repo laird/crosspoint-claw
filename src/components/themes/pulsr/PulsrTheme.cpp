@@ -181,7 +181,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
           // Show "DZ" warning pill when Danger Zone is active and feed is idle
           showPill = true;
           feedColor = ((millis() / 800) % 2 == 0 ? Color::White : Color::DarkGray);
-          pillLabel = "DZ";
+          pillLabel = "DZON";
         }
         if (showPill && pillLabel) {
           renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
