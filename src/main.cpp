@@ -577,6 +577,9 @@ void setup() {
 
   // Danger Zone: auto-connect WiFi + start web server + feed sync
   dangerZoneAutoConnect();
+  if (dzWifiConnected) {
+    activityManager.goToFileTransfer();
+  }
 
   // Ensure we're not still holding the power button before leaving setup
   waitForPowerRelease();
