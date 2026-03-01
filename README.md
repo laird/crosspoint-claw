@@ -3,6 +3,7 @@
 This is a fork of [CrossPoint Reader](CROSSPOINT-README.md) that extends it with **AI-driven content delivery**: an RSS feed pipeline that lets a personal AI agent (OpenClaw/Chip) automatically generate, package, and push content — news digests, EPUBs, markdown articles, sleep screen art, and firmware updates — directly to the device over WiFi.
 
 ![Home screen](docs/images/screenshots/home.png)
+*The home screen — recent books surface automatically as new content arrives.*
 
 ---
 
@@ -21,6 +22,8 @@ The device polls an RSS feed server and automatically downloads new content to t
 
 The feed server runs anywhere on your local network (or internet). A simple Python HTTP server with an RSS XML feed is all that's needed. Scripts are included in `scripts/` for pushing content.
 
+---
+
 ### Danger Zone — Remote OTA & Auto-Connect
 
 The **Danger Zone** (enabled in Settings → SYST) unlocks remote management:
@@ -30,13 +33,46 @@ The **Danger Zone** (enabled in Settings → SYST) unlocks remote management:
 - **Remote OTA flash**: push new firmware to the SD card and it flashes on next sleep/wake
 - **QR code on boot**: device lands on the file transfer screen after auto-connect, ready to receive content
 
-![File transfer screen with QR code](docs/images/screenshots/file_transfer.png) ![System settings — Danger Zone toggle](docs/images/screenshots/settings_syst.png)
+| | |
+|---|---|
+| ![File transfer screen with QR code](docs/images/screenshots/file_transfer.png) | ![System settings — Danger Zone toggle](docs/images/screenshots/settings_syst.png) |
+| *On boot with Danger Zone enabled, the device auto-connects and shows the QR code screen* | *Enable Danger Zone in Settings → SYST, then set a password* |
+
+---
 
 ### Web Interface
 
-Once connected, the full web interface is accessible from any browser on the network:
+Once connected, the full web interface is accessible from any browser on the network — upload EPUBs, browse files, trigger syncs, and push firmware.
 
-![Web interface — file manager](docs/images/wifi/webserver_files.png) ![Web interface — upload](docs/images/wifi/webserver_upload.png)
+| | |
+|---|---|
+| ![Web interface — file manager](docs/images/wifi/webserver_files.png) | ![Web interface — upload](docs/images/wifi/webserver_upload.png) |
+| *Browser-based file manager* | *Drag-and-drop EPUB upload* |
+
+---
+
+### Reading
+
+![Reader](docs/images/screenshots/reader.png)
+*Reading an EPUB — delivered automatically via the RSS feed.*
+
+---
+
+### File Browser
+
+![Browse](docs/images/screenshots/browse.png)
+*Browse files on the SD card — new content from the feed appears here automatically.*
+
+---
+
+### Network Setup
+
+| | |
+|---|---|
+| ![Network mode](docs/images/screenshots/network_mode.png) | ![WiFi scan](docs/images/screenshots/wifi_scan.png) |
+| *Choose between joining a network or creating a hotspot* | *Select your WiFi network* |
+
+---
 
 ### OpenClaw / Chip Integration
 
@@ -100,17 +136,6 @@ See `scripts/reader-push-news.py` for pushing news items, and `docs/rss-content-
 ### 4. Configure the feed URL on the device
 
 Settings → NETW → Feed URL → `http://192.168.x.x:8090/feed.xml`
-
----
-
-## Screenshots
-
-| | | |
-|---|---|---|
-| ![Home](docs/images/screenshots/home.png) | ![Reader](docs/images/screenshots/reader.png) | ![Browse](docs/images/screenshots/browse.png) |
-| Home screen | Reading | File browser |
-| ![Network](docs/images/screenshots/network_mode.png) | ![WiFi scan](docs/images/screenshots/wifi_scan.png) | ![Settings](docs/images/screenshots/settings.png) |
-| Network mode | WiFi selection | Settings |
 
 ---
 
