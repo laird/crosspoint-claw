@@ -75,13 +75,15 @@ def inject_version(env):
     base_version = get_base_version(project_dir)
     branch = get_git_branch(project_dir)
     sha = get_git_sha(project_dir)
-    version_string = f'{base_version}-dev+{branch}'
+    # Format: "1.1.1-claw (abc1234)"
+    # -claw marks this as the crosspoint-claw fork; SHA in parens for readability.
+    version_string = f'{base_version}-claw ({sha})'
 
     env.Append(CPPDEFINES=[
         ('CROSSPOINT_VERSION', f'\\"{version_string}\\"'),
         ('CROSSPOINT_GIT_SHA', f'\\"{sha}\\"'),
     ])
-    print(f'CrossPoint build version: {version_string} (sha: {sha})')
+    print(f'CrossPoint build version: {version_string}')
 
 
 # PlatformIO/SCons entry point — Import and env are SCons builtins injected at runtime.
