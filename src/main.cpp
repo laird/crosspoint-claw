@@ -767,72 +767,21 @@ void loop() {
     activityManager.goHome();
   }
 
-  // Danger Zone: handle flash firmware request from API
+  // Danger Zone: handle flash firmware request from API.
+  // We do NOT do OTA inline here — the lwIP TCP stack still has a live connection
+  // from the /api/flash request, and calling WiFi.mode(WIFI_OFF) while packets
+  // are in-flight causes a panic and OTA rollback every time.
+  // Instead: reboot. setup() flashes firmware.bin from SD before WiFi starts,
+  // so the OTA runs with no network activity and never panics.
   if (dzFlashRequested) {
     dzFlashRequested = false;
 
     if (!Storage.exists("/firmware.bin")) {
-      LOG_ERR("DZ", "Flash requested but /firmware.bin not found");
+      LOG_ERR("DZ", "Flash requested but /firmware.bin not found on SD");
     } else {
-      LOG_INF("DZ", "Flashing firmware from /firmware.bin via API...");
-
-      // Stop DZ web server before flashing (OTA disables flash cache)
-      if (dzWebServer) {
-        dzWebServer->stop();
-        dzWebServer.reset();
-        UITheme::setHttpServerActive(false);
-      }
-      UITheme::setNetworkStatus(false, false);
-      WiFi.disconnect(false);
-      WiFi.mode(WIFI_OFF);
-      dzWifiConnected = false;
-
-      FsFile firmwareFile = Storage.open("/firmware.bin");
-      if (firmwareFile) {
-        const size_t fileSize = firmwareFile.size();
-        if (fileSize > 0 && Update.begin(fileSize, U_FLASH)) {
-          size_t written = 0;
-          uint8_t buf[4096];
-          while (written < fileSize) {
-            const size_t toRead = min(sizeof(buf), fileSize - written);
-            const int bytesRead = firmwareFile.read(buf, toRead);
-            if (bytesRead <= 0) break;
-            const size_t bytesWritten = Update.write(buf, bytesRead);
-            if (bytesWritten != static_cast<size_t>(bytesRead)) break;
-            written += bytesWritten;
-            yield();  // Feed watchdog during long SD read
-          }
-          firmwareFile.close();
-          if (written == fileSize && Update.end()) {
-            Storage.remove("/firmware.bin");
-            LOG_INF("DZ", "Firmware flash complete, restarting...");
-            ESP.restart();
-          } else {
-            Update.abort();
-            const char* updateErr = Update.errorString();
-            char errMsg[120];
-            if (written != fileSize) {
-              snprintf(errMsg, sizeof(errMsg), "short write %u/%u: %s", (unsigned)written, (unsigned)fileSize, updateErr);
-            } else {
-              snprintf(errMsg, sizeof(errMsg), "end() failed: %s (wrote %u)", updateErr, (unsigned)written);
-            }
-            LOG_ERR("DZ", "Firmware flash failed: %s", errMsg);
-            // Write error to SD log for later retrieval
-            FsFile logFile;
-            if (Storage.openFileForWrite("DZ", "/ota_error.log", logFile)) {
-              logFile.print(errMsg);
-              logFile.close();
-            }
-          }
-        } else {
-          firmwareFile.close();
-          char errMsg[80];
-          snprintf(errMsg, sizeof(errMsg), "begin failed: %s", Update.errorString());
-          LOG_ERR("DZ", "Update.begin() failed: %s", errMsg);
-        }
-      }
-      // If flash failed, reconnect WiFi so the device is still reachable
-      dangerZoneAutoConnect();
+      LOG_INF("DZ", "firmware.bin found — rebooting to apply via boot-time OTA...");
+      delay(200);  // Let the HTTP response packet reach the browser before reset
+      ESP.restart();
     }
   }
 
