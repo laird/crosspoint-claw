@@ -19,8 +19,10 @@
     .setting-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-color);}
     .setting-row:last-child{border-bottom:none;}
     .btn{border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px;color:#fff;font-weight:600;}
-    .btn-blue{background:#2980b9;} .btn-orange{background:#e67e22;} .btn-red{background:#e74c3c;}
-    .btn:hover{opacity:0.85;}
+    .btn-blue{background:#2980b9;} .btn-orange{background:#e67e22;} .btn-red{background:#e74c3c;} .btn-green{background:#27ae60;}
+    .btn:hover:not(:disabled){opacity:0.85;} .btn:disabled{opacity:0.5;cursor:not-allowed;}
+    #fw-status{margin-top:14px;padding:10px 14px;border-radius:6px;font-size:13px;}
+    #fw-status.fw-ready{background:#d4edda;color:#155724;} #fw-status.fw-none{background:#f8d7da;color:#721c24;}
     .btn-group{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;}
     input[type="password"]{padding:6px 10px;border-radius:4px;border:1px solid #ccc;font-size:14px;width:200px;background:var(--card-bg);color:var(--font-color);}
     #msg{margin-top:16px;padding:10px;border-radius:6px;display:none;}
@@ -45,20 +47,17 @@
       <div class="setting-row"><span><strong>Password</strong></span><input type="password" id="dz-password" placeholder="Danger Zone password" /></div>
       <div class="btn-group">
         <button class="btn btn-blue" onclick="dzFeedSync()">Sync Feed</button>
-        <button class="btn btn-orange" id="btn-flash" onclick="dzFlash()" style="display:none">Flash firmware.bin</button>
+        <button class="btn btn-orange" id="btn-flash" onclick="dzFlash()" disabled>Flash firmware.bin</button>
         <button class="btn btn-red" onclick="dzReboot()">Reboot</button>
       </div>
+      <div id="fw-status"></div>
       <div id="msg"></div>
-    </div>
-    <div class="card" id="firmware-card" style="display:none">
-      <h2>firmware.bin on SD card</h2>
-      <div id="firmware-info"></div>
     </div>
   </div>
 <script>
   function showMsg(t,ok){const e=document.getElementById('msg');e.textContent=t;e.className=ok?'ok':'err';e.style.display='';setTimeout(()=>{e.style.display='none'},5000);}
   function pw(){const p=document.getElementById('dz-password').value;if(!p){alert('Enter your Danger Zone password');return null;}return p;}
-  function auth(p){return{'Authorization':'Basic '+btoa('chip:'+p)};}
+  function auth(p){return{'X-Danger-Zone-Password':p};}
   async function dzReboot(){const p=pw();if(!p)return;if(!confirm('Reboot the device?'))return;const r=await fetch('/api/reboot',{method:'POST',headers:auth(p)});r.ok?showMsg('Rebooting...',true):showMsg('Failed: '+await r.text(),false);}
   async function dzFlash(){const p=pw();if(!p)return;if(!confirm('Flash firmware.bin? Device will reboot.'))return;const r=await fetch('/api/flash',{method:'POST',headers:auth(p)});r.ok?showMsg('Flashing... device will reboot',true):showMsg('Failed: '+await r.text(),false);}
   async function dzFeedSync(){const p=pw();if(!p)return;const r=await fetch('/api/feed/sync',{method:'POST',headers:auth(p)});r.ok?showMsg('Feed sync triggered',true):showMsg('Failed: '+await r.text(),false);}
@@ -69,12 +68,15 @@
       if(data.enabled){
         document.getElementById('dz-main').style.display='';
         const fr=await fetch('/api/firmware-status');const fw=await fr.json();
+        const fwStatus=document.getElementById('fw-status');
+        const btnFlash=document.getElementById('btn-flash');
         if(fw.firmwareReady){
-          document.getElementById('firmware-card').style.display='';
-          let info='Size: '+(fw.fileSize/1024/1024).toFixed(2)+' MB';
+          let info='Ready: '+(fw.fileSize/1024/1024).toFixed(2)+' MB';
           if(fw.version)info+=' — version '+fw.version;
-          document.getElementById('firmware-info').textContent=info;
-          document.getElementById('btn-flash').style.display='';
+          fwStatus.textContent=info;fwStatus.className='fw-ready';
+          btnFlash.classList.add('btn-green');btnFlash.removeAttribute('disabled');
+        }else{
+          fwStatus.textContent='No firmware staged';fwStatus.className='fw-none';
         }
       }else{document.getElementById('dz-disabled').style.display='';}
     }catch(e){document.getElementById('dz-disabled').style.display='';}
