@@ -175,6 +175,7 @@ void CrossPointWebServer::begin() {
   server->on("/api/firmware-status", HTTP_GET, [this] { handleGetFirmwareStatus(); });
   server->on("/api/boot-log", HTTP_GET, [this] { handleGetLog("/boot.log"); });
   server->on("/api/feed/log", HTTP_GET, [this] { handleGetLog("/.crosspoint/feed-sync.log"); });
+  server->on("/api/ota-error", HTTP_GET, [this] { handleGetLog("/ota_error.log"); });
 
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
