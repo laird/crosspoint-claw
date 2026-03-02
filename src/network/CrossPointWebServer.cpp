@@ -650,6 +650,13 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
     httpUploadFileName = upload.filename;
     httpUploadReceived = 0;
 
+    // Block firmware.bin uploads when Danger Zone is disabled
+    if (state.fileName == "firmware.bin" && !SETTINGS.dangerZoneEnabled) {
+      state.error = "Forbidden: Danger Zone not enabled";
+      LOG_ERR("WEB", "[UPLOAD] Blocked firmware.bin upload: DZ disabled");
+      return;
+    }
+
     // Get upload path from query parameter (defaults to root if not specified)
     // Note: We use query parameter instead of form data because multipart form
     // fields aren't available until after file upload completes
@@ -1386,6 +1393,13 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
           wsUploadPath = msg.substring(secondColon + 1);
           wsUploadReceived = 0;
           wsUploadStartTime = millis();
+
+          // Block firmware.bin uploads when Danger Zone is disabled
+          if (wsUploadFileName == "firmware.bin" && !SETTINGS.dangerZoneEnabled) {
+            wsServer->sendTXT(num, "ERROR:Forbidden: Danger Zone not enabled");
+            LOG_ERR("WS", "[UPLOAD] Blocked firmware.bin upload: DZ disabled");
+            return;
+          }
 
           // Ensure path is valid
           if (!wsUploadPath.startsWith("/")) wsUploadPath = "/" + wsUploadPath;
