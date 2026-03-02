@@ -77,6 +77,9 @@ class GfxRenderer {
   int getScreenWidth() const;
   int getScreenHeight() const;
   void displayBuffer(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH) const;
+  // Register a persistent version string drawn in the bottom-left corner of every screen.
+  // Called once from main after fonts are loaded. fontId must remain registered.
+  static void setVersionOverlay(int fontId, const char* version);
   // EXPERIMENTAL: Windowed update - display only a rectangular region
   // void displayWindow(int x, int y, int width, int height) const;
   void invertScreen() const;

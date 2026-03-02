@@ -273,6 +273,7 @@ void setupDisplayAndFonts() {
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
   renderer.insertFont(PULSR_10_FONT_ID, pulsr10FontFamily);
   renderer.insertFont(PULSR_12_FONT_ID, pulsr12FontFamily);
+  GfxRenderer::setVersionOverlay(SMALL_FONT_ID, CROSSPOINT_VERSION);
   LOG_DBG("MAIN", "Fonts setup");
 }
 
@@ -487,12 +488,12 @@ void setup() {
     };
 
     auto showError = [&](const char* msg, size_t fileSize = 0, size_t written = 0) {
+      Storage.remove("/firmware.bin");  // Always delete — prevents re-flash loop on next boot
       const bool logged = logOtaError(msg, fileSize, written);
       renderer.clearScreen();
       renderer.drawCenteredText(PULSR_10_FONT_ID, pageHeight / 2 - 30, "Firmware update failed", true, EpdFontFamily::BOLD);
       renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2, msg);
-      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 20, "firmware.bin NOT deleted");
-      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 38,
+      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 20,
                                 logged ? "Error saved to /ota_error.log" : "Could not write /ota_error.log");
       renderer.displayBuffer(HalDisplay::FULL_REFRESH);
       delay(15000);
@@ -826,12 +827,14 @@ void loop() {
               logFile.print(errMsg);
               logFile.close();
             }
+            Storage.remove("/firmware.bin");  // Always delete — prevents re-flash loop on next sync
           }
         } else {
           firmwareFile.close();
           char errMsg[80];
           snprintf(errMsg, sizeof(errMsg), "begin failed: %s", Update.errorString());
           LOG_ERR("DZ", "Update.begin() failed: %s", errMsg);
+          Storage.remove("/firmware.bin");  // Always delete — prevents re-flash loop on next sync
         }
       }
       // If flash failed, reconnect WiFi so the device is still reachable
