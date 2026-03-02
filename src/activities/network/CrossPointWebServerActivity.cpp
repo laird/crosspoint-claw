@@ -294,12 +294,14 @@ void CrossPointWebServerActivity::stopWebServer() {
 }
 
 void CrossPointWebServerActivity::loop() {
-  // If a DZ firmware flash was requested, exit cleanly first so onExit() stops
-  // the web server and disconnects WiFi before the main loop kills WiFi.
-  // Without this, killing WiFi while the TCP stack is live causes a panic.
+  // If a DZ firmware flash was requested, stop the web server and WiFi NOW —
+  // replaceActivity() defers onExit() to the next loop iteration, so if we
+  // only call onGoHome() the main loop's flash code runs while the TCP stack
+  // is still live, causing a panic and OTA rollback.
   extern volatile bool dzFlashRequested;
   if (dzFlashRequested) {
-    onGoHome();
+    onExit();     // Stops web server, disconnects WiFi synchronously
+    onGoHome();   // Then queue the activity transition
     return;
   }
 
