@@ -40,6 +40,19 @@ class ContentOpfParser final : public Print {
   std::vector<ItemIndexEntry> itemIndex;
   bool useItemIndex = false;
 
+  // Scratch strings for startElement() callbacks — stored as members so they live
+  // on the heap (in this object) rather than on the Expat callback stack.
+  // Expat consumes ~400 bytes of stack internally; local std::string objects in the
+  // callback would overflow loopTask's 8 KB stack on large EPUBs.
+  std::string tmp_itemId;
+  std::string tmp_href;
+  std::string tmp_mediaType;
+  std::string tmp_properties;
+  std::string tmp_coverItemId;
+  std::string tmp_idref;
+  std::string tmp_type;
+  std::string tmp_guideHref;
+
   static constexpr uint16_t LARGE_SPINE_THRESHOLD = 400;
 
   // FNV-1a hash function

@@ -512,53 +512,86 @@ void setup() {
         firmwareFile.close();
         LOG_ERR("MAIN", "firmware.bin is empty (0 bytes) — aborting update");
         showError("firmware.bin is empty (0 bytes)");
-      } else if (Update.begin(fileSize, U_FLASH)) {
-        int lastPct = 0;
-        Update.onProgress([&](size_t progress, size_t total) {
-          if (total == 0) return;
-          const int pct = std::min(100, static_cast<int>((progress * 100) / total));
-          if (pct >= lastPct + 5) {
-            lastPct = pct;
-            drawUpdateScreen(pct);
-          }
-        });
-        // HalFile is Print-only (not Stream), so read+write in chunks
-        size_t written = 0;
-        uint8_t buf[4096];
-        while (written < fileSize) {
-          const size_t toRead = min(sizeof(buf), fileSize - written);
-          const int bytesRead = firmwareFile.read(buf, toRead);
-          if (bytesRead <= 0) break;
-          const size_t bytesWritten = Update.write(buf, bytesRead);
-          if (bytesWritten != static_cast<size_t>(bytesRead)) break;
-          written += bytesWritten;
-          yield();  // Feed watchdog during long SD read
-        }
-        firmwareFile.close();
-        if (written == fileSize && Update.end()) {
-          if (!Storage.remove("/firmware.bin")) {
-            LOG_INF("MAIN", "Firmware installed but failed to delete firmware.bin from SD card");
-          }
-          LOG_INF("MAIN", "Firmware update complete, restarting...");
-          ESP.restart();
-        } else {
-          Update.abort();
-          char errMsg[80];
-          const char* updateErr = Update.errorString();
-          if (written != fileSize) {
-            snprintf(errMsg, sizeof(errMsg), "short write %u/%u: %s", (unsigned)written, (unsigned)fileSize, updateErr);
-          } else {
-            snprintf(errMsg, sizeof(errMsg), "finalize failed: %s", updateErr);
-          }
-          LOG_ERR("MAIN", "Firmware update failed: %s", errMsg);
-          showError(errMsg, fileSize, written);
-        }
       } else {
-        firmwareFile.close();
-        char errMsg[80];
-        snprintf(errMsg, sizeof(errMsg), "begin failed: %s", Update.errorString());
-        LOG_ERR("MAIN", "Update.begin() failed: %s", errMsg);
-        showError(errMsg, fileSize);
+        // Use ESP-IDF OTA API: always write to the INACTIVE partition so the
+        // running partition is never touched (safe even if flash is interrupted).
+        const esp_partition_t* runningPart = esp_ota_get_running_partition();
+        const esp_partition_t* updatePart  = esp_ota_get_next_update_partition(nullptr);
+        LOG_INF("MAIN", "OTA: running=%s@0x%lx  target=%s@0x%lx",
+                runningPart ? runningPart->label : "?",
+                runningPart ? (unsigned long)runningPart->address : 0UL,
+                updatePart  ? updatePart->label  : "?",
+                updatePart  ? (unsigned long)updatePart->address  : 0UL);
+
+        if (!updatePart) {
+          firmwareFile.close();
+          LOG_ERR("MAIN", "No OTA update partition found");
+          showError("no update partition found");
+        } else {
+          esp_ota_handle_t otaHandle = 0;
+          esp_err_t err = esp_ota_begin(updatePart, OTA_SIZE_UNKNOWN, &otaHandle);
+          if (err != ESP_OK) {
+            firmwareFile.close();
+            char errMsg[80];
+            snprintf(errMsg, sizeof(errMsg), "ota_begin: %s", esp_err_to_name(err));
+            LOG_ERR("MAIN", "OTA begin failed: %s", errMsg);
+            showError(errMsg, fileSize);
+          } else {
+            drawUpdateScreen(0);
+            size_t written = 0;
+            int lastPct = 0;
+            bool writeOk = true;
+            uint8_t buf[4096];
+            while (written < fileSize) {
+              const size_t toRead = min(sizeof(buf), fileSize - written);
+              const int bytesRead = firmwareFile.read(buf, toRead);
+              if (bytesRead <= 0) { writeOk = false; break; }
+              err = esp_ota_write(otaHandle, buf, static_cast<size_t>(bytesRead));
+              if (err != ESP_OK) { writeOk = false; break; }
+              written += static_cast<size_t>(bytesRead);
+              yield();  // Feed watchdog during long SD read
+              const int pct = static_cast<int>((written * 100) / fileSize);
+              if (pct >= lastPct + 5) { lastPct = pct; drawUpdateScreen(pct); }
+            }
+            firmwareFile.close();
+
+            if (!writeOk || written != fileSize) {
+              esp_ota_abort(otaHandle);
+              char errMsg[80];
+              if (!writeOk) {
+                snprintf(errMsg, sizeof(errMsg), "ota_write at %u/%u: %s",
+                         (unsigned)written, (unsigned)fileSize, esp_err_to_name(err));
+              } else {
+                snprintf(errMsg, sizeof(errMsg), "short read %u/%u",
+                         (unsigned)written, (unsigned)fileSize);
+              }
+              LOG_ERR("MAIN", "OTA write failed: %s", errMsg);
+              showError(errMsg, fileSize, written);
+            } else {
+              err = esp_ota_end(otaHandle);
+              if (err != ESP_OK) {
+                char errMsg[80];
+                snprintf(errMsg, sizeof(errMsg), "ota_end: %s", esp_err_to_name(err));
+                LOG_ERR("MAIN", "OTA end/validate failed: %s", errMsg);
+                showError(errMsg, fileSize, written);
+              } else {
+                err = esp_ota_set_boot_partition(updatePart);
+                if (err != ESP_OK) {
+                  char errMsg[80];
+                  snprintf(errMsg, sizeof(errMsg), "set_boot: %s", esp_err_to_name(err));
+                  LOG_ERR("MAIN", "OTA set_boot_partition failed: %s", errMsg);
+                  showError(errMsg);
+                } else {
+                  if (!Storage.remove("/firmware.bin")) {
+                    LOG_INF("MAIN", "OTA done but could not delete firmware.bin");
+                  }
+                  LOG_INF("MAIN", "Firmware update complete, restarting...");
+                  ESP.restart();
+                }
+              }
+            }
+          }
+        }
       }
     } else {
       LOG_ERR("MAIN", "Failed to open /firmware.bin");
@@ -796,47 +829,88 @@ void loop() {
       FsFile firmwareFile = Storage.open("/firmware.bin");
       if (firmwareFile) {
         const size_t fileSize = firmwareFile.size();
-        if (fileSize > 0 && Update.begin(fileSize, U_FLASH)) {
-          size_t written = 0;
-          uint8_t buf[4096];
-          while (written < fileSize) {
-            const size_t toRead = min(sizeof(buf), fileSize - written);
-            const int bytesRead = firmwareFile.read(buf, toRead);
-            if (bytesRead <= 0) break;
-            const size_t bytesWritten = Update.write(buf, bytesRead);
-            if (bytesWritten != static_cast<size_t>(bytesRead)) break;
-            written += bytesWritten;
-            yield();  // Feed watchdog during long SD read
-          }
+        if (fileSize == 0) {
           firmwareFile.close();
-          if (written == fileSize && Update.end()) {
-            Storage.remove("/firmware.bin");
-            LOG_INF("DZ", "Firmware flash complete, restarting...");
-            ESP.restart();
-          } else {
-            Update.abort();
-            const char* updateErr = Update.errorString();
-            char errMsg[120];
-            if (written != fileSize) {
-              snprintf(errMsg, sizeof(errMsg), "short write %u/%u: %s", (unsigned)written, (unsigned)fileSize, updateErr);
-            } else {
-              snprintf(errMsg, sizeof(errMsg), "end() failed: %s (wrote %u)", updateErr, (unsigned)written);
-            }
-            LOG_ERR("DZ", "Firmware flash failed: %s", errMsg);
-            // Write error to SD log for later retrieval
+          LOG_ERR("DZ", "firmware.bin is empty — deleting");
+          Storage.remove("/firmware.bin");
+        } else {
+          // Use ESP-IDF OTA API: write to the INACTIVE partition only.
+          const esp_partition_t* runningPart = esp_ota_get_running_partition();
+          const esp_partition_t* updatePart  = esp_ota_get_next_update_partition(nullptr);
+          LOG_INF("DZ", "OTA: running=%s@0x%lx  target=%s@0x%lx",
+                  runningPart ? runningPart->label : "?",
+                  runningPart ? (unsigned long)runningPart->address : 0UL,
+                  updatePart  ? updatePart->label  : "?",
+                  updatePart  ? (unsigned long)updatePart->address  : 0UL);
+
+          auto dzFlashFail = [&](const char* errMsg) {
+            LOG_ERR("DZ", "Flash failed: %s", errMsg);
             FsFile logFile;
             if (Storage.openFileForWrite("DZ", "/.crosspoint/ota_error.log", logFile)) {
               logFile.print(errMsg);
               logFile.close();
             }
-            Storage.remove("/firmware.bin");  // Always delete — prevents re-flash loop on next sync
+            Storage.remove("/firmware.bin");
+          };
+
+          if (!updatePart) {
+            firmwareFile.close();
+            dzFlashFail("no update partition found");
+          } else {
+            esp_ota_handle_t otaHandle = 0;
+            esp_err_t err = esp_ota_begin(updatePart, OTA_SIZE_UNKNOWN, &otaHandle);
+            if (err != ESP_OK) {
+              firmwareFile.close();
+              char errMsg[80];
+              snprintf(errMsg, sizeof(errMsg), "ota_begin: %s", esp_err_to_name(err));
+              dzFlashFail(errMsg);
+            } else {
+              size_t written = 0;
+              bool writeOk = true;
+              uint8_t buf[4096];
+              while (written < fileSize) {
+                const size_t toRead = min(sizeof(buf), fileSize - written);
+                const int bytesRead = firmwareFile.read(buf, toRead);
+                if (bytesRead <= 0) { writeOk = false; break; }
+                err = esp_ota_write(otaHandle, buf, static_cast<size_t>(bytesRead));
+                if (err != ESP_OK) { writeOk = false; break; }
+                written += static_cast<size_t>(bytesRead);
+                yield();  // Feed watchdog during long SD read
+              }
+              firmwareFile.close();
+
+              if (!writeOk || written != fileSize) {
+                esp_ota_abort(otaHandle);
+                char errMsg[120];
+                if (!writeOk) {
+                  snprintf(errMsg, sizeof(errMsg), "ota_write at %u/%u: %s",
+                           (unsigned)written, (unsigned)fileSize, esp_err_to_name(err));
+                } else {
+                  snprintf(errMsg, sizeof(errMsg), "short read %u/%u",
+                           (unsigned)written, (unsigned)fileSize);
+                }
+                dzFlashFail(errMsg);
+              } else {
+                err = esp_ota_end(otaHandle);
+                if (err != ESP_OK) {
+                  char errMsg[80];
+                  snprintf(errMsg, sizeof(errMsg), "ota_end: %s", esp_err_to_name(err));
+                  dzFlashFail(errMsg);
+                } else {
+                  err = esp_ota_set_boot_partition(updatePart);
+                  if (err != ESP_OK) {
+                    char errMsg[80];
+                    snprintf(errMsg, sizeof(errMsg), "set_boot: %s", esp_err_to_name(err));
+                    dzFlashFail(errMsg);
+                  } else {
+                    Storage.remove("/firmware.bin");
+                    LOG_INF("DZ", "Firmware flash complete, restarting...");
+                    ESP.restart();
+                  }
+                }
+              }
+            }
           }
-        } else {
-          firmwareFile.close();
-          char errMsg[80];
-          snprintf(errMsg, sizeof(errMsg), "begin failed: %s", Update.errorString());
-          LOG_ERR("DZ", "Update.begin() failed: %s", errMsg);
-          Storage.remove("/firmware.bin");  // Always delete — prevents re-flash loop on next sync
         }
       }
       // If flash failed, reconnect WiFi so the device is still reachable

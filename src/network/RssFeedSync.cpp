@@ -396,6 +396,19 @@ void ensureParentDir(const std::string& path) {
 void syncTask(void*) {
   LOG_DBG(TAG, "Feed sync started");
   LOG_INF(TAG, "Feed sync started");
+
+  // Heap guard: abort early if memory is critically low rather than crashing
+  // mid-parse from an OOM inside std::string / std::vector operations.
+  constexpr uint32_t MIN_HEAP_FOR_SYNC = 30000;
+  const uint32_t freeHeap = ESP.getFreeHeap();
+  if (freeHeap < MIN_HEAP_FOR_SYNC) {
+    LOG_ERR(TAG, "Insufficient heap (%lu bytes) for feed sync — aborting", (unsigned long)freeHeap);
+    setState(RssFeedSync::State::ERROR);
+    syncTaskHandle = nullptr;
+    vTaskDelete(nullptr);
+    return;
+  }
+
   setState(RssFeedSync::State::FETCHING);
 
   // Open feed log file — overwrites each run so /api/feed/log shows the latest sync.
@@ -527,6 +540,7 @@ void syncTask(void*) {
       }
       if (HttpDownloader::downloadToFile(item.enclosureUrl, "/firmware.bin") != HttpDownloader::OK) {
         LOG_ERR(TAG, "Firmware download failed: %s", item.enclosureUrl.c_str());
+        Storage.remove("/firmware.bin");  // Delete any partial download — prevent flash loop
         return;
       }
       LOG_DBG(TAG, "Firmware downloaded — will apply on next boot");

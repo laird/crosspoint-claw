@@ -156,84 +156,84 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
 
   if (self->state == IN_METADATA && (strcmp(name, "meta") == 0 || strcmp(name, "opf:meta") == 0)) {
     bool isCover = false;
-    std::string coverItemId;
+    self->tmp_coverItemId.clear();
 
     for (int i = 0; atts[i]; i += 2) {
       if (strcmp(atts[i], "name") == 0 && strcmp(atts[i + 1], "cover") == 0) {
         isCover = true;
       } else if (strcmp(atts[i], "content") == 0) {
-        coverItemId = atts[i + 1];
+        self->tmp_coverItemId = atts[i + 1];
       }
     }
 
     if (isCover) {
-      self->coverItemId = coverItemId;
+      self->coverItemId = self->tmp_coverItemId;
     }
     return;
   }
 
   if (self->state == IN_MANIFEST && (strcmp(name, "item") == 0 || strcmp(name, "opf:item") == 0)) {
-    std::string itemId;
-    std::string href;
-    std::string mediaType;
-    std::string properties;
+    self->tmp_itemId.clear();
+    self->tmp_href.clear();
+    self->tmp_mediaType.clear();
+    self->tmp_properties.clear();
 
     for (int i = 0; atts[i]; i += 2) {
       if (strcmp(atts[i], "id") == 0) {
-        itemId = atts[i + 1];
+        self->tmp_itemId = atts[i + 1];
       } else if (strcmp(atts[i], "href") == 0) {
-        href = FsHelpers::normalisePath(self->baseContentPath + atts[i + 1]);
+        self->tmp_href = FsHelpers::normalisePath(self->baseContentPath + atts[i + 1]);
       } else if (strcmp(atts[i], "media-type") == 0) {
-        mediaType = atts[i + 1];
+        self->tmp_mediaType = atts[i + 1];
       } else if (strcmp(atts[i], "properties") == 0) {
-        properties = atts[i + 1];
+        self->tmp_properties = atts[i + 1];
       }
     }
 
     // Record index entry for fast lookup later
     if (self->tempItemStore) {
       ItemIndexEntry entry;
-      entry.idHash = fnvHash(itemId);
-      entry.idLen = static_cast<uint16_t>(itemId.size());
+      entry.idHash = fnvHash(self->tmp_itemId);
+      entry.idLen = static_cast<uint16_t>(self->tmp_itemId.size());
       entry.fileOffset = static_cast<uint32_t>(self->tempItemStore.position());
       self->itemIndex.push_back(entry);
     }
 
     // Write items down to SD card
-    serialization::writeString(self->tempItemStore, itemId);
-    serialization::writeString(self->tempItemStore, href);
+    serialization::writeString(self->tempItemStore, self->tmp_itemId);
+    serialization::writeString(self->tempItemStore, self->tmp_href);
 
-    if (itemId == self->coverItemId) {
-      self->coverItemHref = href;
+    if (self->tmp_itemId == self->coverItemId) {
+      self->coverItemHref = self->tmp_href;
     }
 
-    if (mediaType == MEDIA_TYPE_NCX) {
+    if (self->tmp_mediaType == MEDIA_TYPE_NCX) {
       if (self->tocNcxPath.empty()) {
-        self->tocNcxPath = href;
+        self->tocNcxPath = self->tmp_href;
       } else {
-        LOG_DBG("COF", "Warning: Multiple NCX files found in manifest. Ignoring duplicate: %s", href.c_str());
+        LOG_DBG("COF", "Warning: Multiple NCX files found in manifest. Ignoring duplicate: %s", self->tmp_href.c_str());
       }
     }
 
     // Collect CSS files
-    if (mediaType == MEDIA_TYPE_CSS) {
-      self->cssFiles.push_back(href);
+    if (self->tmp_mediaType == MEDIA_TYPE_CSS) {
+      self->cssFiles.push_back(self->tmp_href);
     }
 
     // EPUB 3: Check for nav document (properties contains "nav")
-    if (!properties.empty() && self->tocNavPath.empty()) {
-      // Properties is space-separated, check if "nav" is present as a word
-      if (properties == "nav" || properties.find("nav ") == 0 || properties.find(" nav") != std::string::npos) {
-        self->tocNavPath = href;
-        LOG_DBG("COF", "Found EPUB 3 nav document: %s", href.c_str());
+    if (!self->tmp_properties.empty() && self->tocNavPath.empty()) {
+      if (self->tmp_properties == "nav" || self->tmp_properties.find("nav ") == 0 ||
+          self->tmp_properties.find(" nav") != std::string::npos) {
+        self->tocNavPath = self->tmp_href;
+        LOG_DBG("COF", "Found EPUB 3 nav document: %s", self->tmp_href.c_str());
       }
     }
 
     // EPUB 3: Check for cover image (properties contains "cover-image")
-    if (!properties.empty() && self->coverItemHref.empty()) {
-      if (properties == "cover-image" || properties.find("cover-image ") == 0 ||
-          properties.find(" cover-image") != std::string::npos) {
-        self->coverItemHref = href;
+    if (!self->tmp_properties.empty() && self->coverItemHref.empty()) {
+      if (self->tmp_properties == "cover-image" || self->tmp_properties.find("cover-image ") == 0 ||
+          self->tmp_properties.find(" cover-image") != std::string::npos) {
+        self->coverItemHref = self->tmp_href;
       }
     }
     return;
@@ -245,14 +245,14 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
     if (self->state == IN_SPINE && (strcmp(name, "itemref") == 0 || strcmp(name, "opf:itemref") == 0)) {
       for (int i = 0; atts[i]; i += 2) {
         if (strcmp(atts[i], "idref") == 0) {
-          const std::string idref = atts[i + 1];
-          std::string href;
+          self->tmp_idref = atts[i + 1];
+          self->tmp_href.clear();
           bool found = false;
 
           if (self->useItemIndex) {
             // Fast path: binary search
-            uint32_t targetHash = fnvHash(idref);
-            uint16_t targetLen = static_cast<uint16_t>(idref.size());
+            uint32_t targetHash = fnvHash(self->tmp_idref);
+            uint16_t targetLen = static_cast<uint16_t>(self->tmp_idref.size());
 
             auto it = std::lower_bound(self->itemIndex.begin(), self->itemIndex.end(),
                                        ItemIndexEntry{targetHash, targetLen, 0},
@@ -263,10 +263,10 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
             // Check for match (may need to check a few due to hash collisions)
             while (it != self->itemIndex.end() && it->idHash == targetHash) {
               self->tempItemStore.seek(it->fileOffset);
-              std::string itemId;
-              serialization::readString(self->tempItemStore, itemId);
-              if (itemId == idref) {
-                serialization::readString(self->tempItemStore, href);
+              self->tmp_itemId.clear();
+              serialization::readString(self->tempItemStore, self->tmp_itemId);
+              if (self->tmp_itemId == self->tmp_idref) {
+                serialization::readString(self->tempItemStore, self->tmp_href);
                 found = true;
                 break;
               }
@@ -277,11 +277,11 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
             // TODO: This lookup is slow as need to scan through all items each time.
             //       It can take up to 200ms per item when getting to 1500 items.
             self->tempItemStore.seek(0);
-            std::string itemId;
             while (self->tempItemStore.available()) {
-              serialization::readString(self->tempItemStore, itemId);
-              serialization::readString(self->tempItemStore, href);
-              if (itemId == idref) {
+              self->tmp_itemId.clear();
+              serialization::readString(self->tempItemStore, self->tmp_itemId);
+              serialization::readString(self->tempItemStore, self->tmp_href);
+              if (self->tmp_itemId == self->tmp_idref) {
                 found = true;
                 break;
               }
@@ -289,7 +289,7 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
           }
 
           if (found && self->cache) {
-            self->cache->createSpineEntry(href);
+            self->cache->createSpineEntry(self->tmp_href);
           }
         }
       }
@@ -298,22 +298,22 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
   }
   // parse the guide
   if (self->state == IN_GUIDE && (strcmp(name, "reference") == 0 || strcmp(name, "opf:reference") == 0)) {
-    std::string type;
-    std::string guideHref;
+    self->tmp_type.clear();
+    self->tmp_guideHref.clear();
     for (int i = 0; atts[i]; i += 2) {
       if (strcmp(atts[i], "type") == 0) {
-        type = atts[i + 1];
+        self->tmp_type = atts[i + 1];
       } else if (strcmp(atts[i], "href") == 0) {
-        guideHref = FsHelpers::normalisePath(self->baseContentPath + atts[i + 1]);
+        self->tmp_guideHref = FsHelpers::normalisePath(self->baseContentPath + atts[i + 1]);
       }
     }
-    if (!guideHref.empty()) {
-      if (type == "text" || (type == "start" && !self->textReferenceHref.empty())) {
-        LOG_DBG("COF", "Found %s reference in guide: %s", type.c_str(), guideHref.c_str());
-        self->textReferenceHref = guideHref;
-      } else if ((type == "cover" || type == "cover-page") && self->guideCoverPageHref.empty()) {
-        LOG_DBG("COF", "Found cover reference in guide: %s", guideHref.c_str());
-        self->guideCoverPageHref = guideHref;
+    if (!self->tmp_guideHref.empty()) {
+      if (self->tmp_type == "text" || (self->tmp_type == "start" && !self->textReferenceHref.empty())) {
+        LOG_DBG("COF", "Found %s reference in guide: %s", self->tmp_type.c_str(), self->tmp_guideHref.c_str());
+        self->textReferenceHref = self->tmp_guideHref;
+      } else if ((self->tmp_type == "cover" || self->tmp_type == "cover-page") && self->guideCoverPageHref.empty()) {
+        LOG_DBG("COF", "Found cover reference in guide: %s", self->tmp_guideHref.c_str());
+        self->guideCoverPageHref = self->tmp_guideHref;
       }
     }
     return;
