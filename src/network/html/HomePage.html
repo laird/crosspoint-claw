@@ -225,14 +225,17 @@
       } catch (e) {}
     }
 
+    function dzPw() { return prompt('Danger Zone password:'); }
+
     async function flashFirmware() {
+      const p = dzPw(); if (!p) return;
       const btn = document.getElementById('flash-btn');
       const status = document.getElementById('flash-status');
       if (!confirm('Flash firmware now? The device will reboot.')) return;
       btn.disabled = true;
       status.textContent = 'Flashing...';
       try {
-        const r = await fetch('/api/flash', { method: 'POST' });
+        const r = await fetch('/api/flash', { method: 'POST', headers: {'X-Danger-Zone-Password': p} });
         if (r.ok) {
           status.textContent = 'Flashing in progress. Device will reboot...';
         } else {
@@ -257,13 +260,14 @@
     }
 
     async function dzFlash() {
+      const p = dzPw(); if (!p) return;
       const btn = document.getElementById('dz-flash-btn');
       const status = document.getElementById('dz-flash-status');
       if (!confirm('Flash firmware.bin now? Device will reboot.')) return;
       btn.disabled = true;
       status.textContent = 'Flashing...';
       try {
-        const r = await fetch('/api/flash', { method: 'POST' });
+        const r = await fetch('/api/flash', { method: 'POST', headers: {'X-Danger-Zone-Password': p} });
         status.textContent = r.ok ? 'Flashing — device will reboot...' : (await r.text() || 'Failed');
         if (!r.ok) btn.disabled = false;
       } catch (e) {
@@ -273,13 +277,14 @@
     }
 
     async function dzReboot() {
+      const p = dzPw(); if (!p) return;
       const btn = document.getElementById('dz-reboot-btn');
       const status = document.getElementById('dz-reboot-status');
       if (!confirm('Reboot device now?')) return;
       btn.disabled = true;
       status.textContent = 'Rebooting...';
       try {
-        await fetch('/api/reboot', { method: 'POST' });
+        await fetch('/api/reboot', { method: 'POST', headers: {'X-Danger-Zone-Password': p} });
         status.textContent = 'Device rebooting...';
       } catch (e) {
         status.textContent = 'Sent.';
