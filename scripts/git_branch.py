@@ -1,8 +1,8 @@
 """
-PlatformIO pre-build script: inject git branch into CROSSPOINT_VERSION for
+PlatformIO pre-build script: inject git SHA into CROSSPOINT_VERSION for
 the default (dev) environment.
 
-Results in a version string like:  1.1.0-dev+feat-koysnc-xpath
+Results in a version string like:  1.1.1-crosspoint-claw (sha1a2b3c4d)
 Release environments are unaffected; they set CROSSPOINT_VERSION in the ini.
 """
 
@@ -16,28 +16,21 @@ def warn(msg):
     print(f'WARNING [git_branch.py]: {msg}', file=sys.stderr)
 
 
-def get_git_branch(project_dir):
+def get_git_sha(project_dir):
     try:
-        branch = subprocess.check_output(
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+        sha = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
             text=True, stderr=subprocess.PIPE, cwd=project_dir
         ).strip()
-        # Detached HEAD — show the short SHA instead
-        if branch == 'HEAD':
-            branch = subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                text=True, stderr=subprocess.PIPE, cwd=project_dir
-            ).strip()
-        # Strip characters that would break a C string literal
-        return ''.join(c for c in branch if c not in '"\\')
+        return ''.join(c for c in sha if c not in '"\\')
     except FileNotFoundError:
-        warn('git not found on PATH; branch suffix will be "unknown"')
+        warn('git not found on PATH; SHA will be "unknown"')
         return 'unknown'
     except subprocess.CalledProcessError as e:
-        warn(f'git command failed (exit {e.returncode}): {e.stderr.strip()}; branch suffix will be "unknown"')
+        warn(f'git command failed (exit {e.returncode}): {e.stderr.strip()}; SHA will be "unknown"')
         return 'unknown'
     except Exception as e:
-        warn(f'Unexpected error reading git branch: {e}; branch suffix will be "unknown"')
+        warn(f'Unexpected error reading git SHA: {e}; SHA will be "unknown"')
         return 'unknown'
 
 
@@ -62,8 +55,8 @@ def inject_version(env):
 
     project_dir = env['PROJECT_DIR']
     base_version = get_base_version(project_dir)
-    branch = get_git_branch(project_dir)
-    version_string = f'{base_version}-dev+{branch}'
+    sha = get_git_sha(project_dir)
+    version_string = f'{base_version} (sha{sha})'
 
     env.Append(CPPDEFINES=[('CROSSPOINT_VERSION', f'\\"{version_string}\\"')])
     print(f'CrossPoint build version: {version_string}')
