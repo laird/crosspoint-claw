@@ -164,6 +164,22 @@ void SettingsActivity::toggleCurrentSetting() {
     // Toggle the boolean value using the member pointer
     const bool currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = !currentValue;
+    // If Danger Zone was just enabled without a password, immediately prompt to set one
+    if (setting.nameId == StrId::STR_DANGER_ZONE && SETTINGS.dangerZoneEnabled &&
+        SETTINGS.dangerZonePassword[0] == '\0') {
+      SETTINGS.saveToFile();
+      startActivityForResult(
+          std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_DANGER_ZONE_PASSWORD), "",
+                                                  sizeof(SETTINGS.dangerZonePassword) - 1, true),
+          [this](const ActivityResult& result) {
+            if (!result.isCancelled) {
+              const auto& kbd = std::get<KeyboardResult>(result.data);
+              snprintf(SETTINGS.dangerZonePassword, sizeof(SETTINGS.dangerZonePassword), "%s", kbd.text.c_str());
+              SETTINGS.saveToFile();
+            }
+          });
+      return;
+    }
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
@@ -279,11 +295,19 @@ void SettingsActivity::render(RenderLock&&) {
       },
       true);
 
-  // Draw description for Feed Sync action when selected
+  // Draw hint text when a setting with help text is selected
+  const char* hint = nullptr;
   if (currentSettings == &systemSettings && selectedSettingIndex >= 0 &&
-      selectedSettingIndex < static_cast<int>(systemSettings.size()) &&
-      systemSettings[selectedSettingIndex].action == SettingAction::FeedSync) {
-    const char* hint = tr(STR_FEED_SYNC_HINT);
+      selectedSettingIndex < static_cast<int>(systemSettings.size())) {
+    const auto& sel = systemSettings[selectedSettingIndex];
+    if (sel.action == SettingAction::FeedSync) {
+      hint = tr(STR_FEED_SYNC_HINT);
+    } else if (sel.action == SettingAction::DangerZonePassword ||
+               sel.nameId == StrId::STR_DANGER_ZONE) {
+      hint = tr(STR_DANGER_ZONE_HINT);
+    }
+  }
+  if (hint) {
     const int hintY = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing - renderer.getTextHeight(SMALL_FONT_ID) - 4;
     const int hintW = renderer.getTextWidth(SMALL_FONT_ID, hint);
     const int hintX = (pageWidth - hintW) / 2;
