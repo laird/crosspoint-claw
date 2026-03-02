@@ -782,7 +782,8 @@ void EpubReaderActivity::renderStatusBar() const {
     struct tm timeinfo = {};
     if (getLocalTime(&timeinfo) && timeinfo.tm_year >= 120) {  // year >= 2020 sanity check
       char timeStr[8];
-      strftime(timeStr, sizeof(timeStr), "%H:%M", &timeinfo);
+      const int roundedMin = (timeinfo.tm_min / 5) * 5;  // round down to 5-min mark for e-ink
+      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", timeinfo.tm_hour, roundedMin);
       if (title.empty()) {
         title = timeStr;
       } else {
