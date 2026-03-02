@@ -283,7 +283,9 @@ void waitForPowerRelease() {
 
 // Tear down Danger Zone web server and WiFi, freeing heap for reading.
 // Safe to call even if DZ is not active.
-void teardownDangerZone(const char* reason = "reading") {
+// If disableFlag=true, also clears dangerZoneEnabled so it won't auto-reconnect
+// on the next wake (used for inactivity-triggered sleep).
+void teardownDangerZone(const char* reason = "reading", bool disableFlag = false) {
   if (dzWebServer || dzWifiConnected) {
     LOG_INF("DZ", "Tearing down WiFi + web server (%s)", reason);
     if (dzWebServer) {
@@ -296,6 +298,11 @@ void teardownDangerZone(const char* reason = "reading") {
     WiFi.disconnect(true);  // true = turn off radio
     WiFi.mode(WIFI_OFF);
     LOG_INF("DZ", "Teardown complete. Free heap: %lu", esp_get_free_heap_size());
+  }
+  if (disableFlag && SETTINGS.dangerZoneEnabled) {
+    LOG_INF("DZ", "Auto-disabling Danger Zone due to inactivity timeout");
+    SETTINGS.dangerZoneEnabled = false;
+    SETTINGS.saveToFile();
   }
 }
 
@@ -818,6 +825,7 @@ void loop() {
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
   if (millis() - lastActivityTime >= sleepTimeoutMs) {
     LOG_DBG("SLP", "Auto-sleep triggered after %lu ms of inactivity", sleepTimeoutMs);
+    teardownDangerZone("inactivity-timeout", /*disableFlag=*/true);
     enterDeepSleep();
     // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
     return;
