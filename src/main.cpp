@@ -534,6 +534,9 @@ void setup() {
     const int barH = 12;
     const int barY = pageHeight / 2 + 35;
 
+    // Version string extracted from firmware.bin (set below before first draw)
+    char newVersion[64] = "(unknown)";
+
     auto drawUpdateScreen = [&](int pct) {
       renderer.clearScreen();
       renderer.drawCenteredText(PULSR_10_FONT_ID, pageHeight / 2 - 20, "Updating firmware...", true, EpdFontFamily::BOLD);
@@ -546,6 +549,12 @@ void setup() {
       char pctStr[8];
       snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
       renderer.drawCenteredText(SMALL_FONT_ID, barY + barH + 8, pctStr);
+      char curBuf[80];
+      char instBuf[80];
+      snprintf(curBuf, sizeof(curBuf), "Current: %s", CROSSPOINT_VERSION);
+      snprintf(instBuf, sizeof(instBuf), "Installing: %s", newVersion);
+      renderer.drawCenteredText(SMALL_FONT_ID, barY + barH + 26, curBuf);
+      renderer.drawCenteredText(SMALL_FONT_ID, barY + barH + 44, instBuf);
       renderer.displayBuffer();
     };
 
@@ -581,6 +590,46 @@ void setup() {
       renderer.displayBuffer(HalDisplay::FULL_REFRESH);
       delay(15000);
     };
+
+    // Extract version string from firmware.bin by scanning for "CrossPoint-ESP32-" prefix
+    // (embedded as part of the User-Agent string literal in OtaUpdater.cpp).
+    // Scans up to 1MB in 4KB chunks — avoids loading the whole 6MB binary into RAM.
+    {
+      constexpr const char prefix[] = "CrossPoint-ESP32-";
+      constexpr size_t prefixLen = sizeof(prefix) - 1;
+      auto* scanBuf = static_cast<char*>(malloc(4096));
+      if (scanBuf) {
+        FsFile vf = Storage.open("/firmware.bin");
+        if (vf) {
+          size_t scanned = 0;
+          bool found = false;
+          while (!found && scanned < 1024u * 1024u) {
+            const size_t got = vf.read(scanBuf, 4096);
+            if (got == 0) break;
+            for (size_t i = 0; i + prefixLen < got && !found; i++) {
+              if (memcmp(scanBuf + i, prefix, prefixLen) == 0) {
+                const char* ver = scanBuf + i + prefixLen;
+                size_t vLen = 0;
+                while (vLen < 63 && i + prefixLen + vLen < got &&
+                       static_cast<uint8_t>(ver[vLen]) >= 0x20 &&
+                       static_cast<uint8_t>(ver[vLen]) <= 0x7e) {
+                  vLen++;
+                }
+                if (vLen > 0) {
+                  memcpy(newVersion, ver, vLen);
+                  newVersion[vLen] = '\0';
+                  found = true;
+                }
+              }
+            }
+            scanned += got;
+          }
+          vf.close();
+        }
+        free(scanBuf);
+      }
+      LOG_INF("MAIN", "New firmware version: %s", newVersion);
+    }
 
     drawUpdateScreen(0);
 
