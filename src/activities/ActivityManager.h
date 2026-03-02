@@ -5,6 +5,7 @@
 #include <freertos/task.h>
 
 #include <cassert>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -63,6 +64,9 @@ class ActivityManager {
   bool requestedUpdate = false;
 
  public:
+  // Optional callback invoked just before opening the reader — use to tear down WiFi/web server.
+  std::function<void()> beforeOpenReader;
+
   explicit ActivityManager(GfxRenderer& renderer, MappedInputManager& mappedInput)
       : renderer(renderer), mappedInput(mappedInput), renderingMutex(xSemaphoreCreateMutex()) {
     assert(renderingMutex != nullptr && "Failed to create rendering mutex");

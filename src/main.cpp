@@ -218,20 +218,30 @@ void waitForPowerRelease() {
   }
 }
 
+// Tear down Danger Zone web server and WiFi, freeing heap for reading.
+// Safe to call even if DZ is not active.
+void teardownDangerZone(const char* reason = "reading") {
+  if (dzWebServer || dzWifiConnected) {
+    LOG_INF("DZ", "Tearing down WiFi + web server (%s)", reason);
+    if (dzWebServer) {
+      dzWebServer->stop();
+      dzWebServer.reset();
+    }
+    dzWifiConnected = false;
+    UITheme::setHttpServerActive(false);
+    UITheme::setNetworkStatus(false, false);
+    WiFi.disconnect(true);  // true = turn off radio
+    WiFi.mode(WIFI_OFF);
+    LOG_INF("DZ", "Teardown complete. Free heap: %lu", esp_get_free_heap_size());
+  }
+}
+
 // Enter deep sleep mode
 void enterDeepSleep() {
   HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
 
   // Shut down Danger Zone background web server if running
-  if (dzWebServer) {
-    dzWebServer->stop();
-    dzWebServer.reset();
-    dzWifiConnected = false;
-    UITheme::setHttpServerActive(false);
-    UITheme::setNetworkStatus(false, false);
-    WiFi.disconnect(false);
-    WiFi.mode(WIFI_OFF);
-  }
+  teardownDangerZone("sleep");
 
   APP_STATE.lastSleepFromReader = activityManager.isReaderActivity();
   APP_STATE.saveToFile();
@@ -249,6 +259,8 @@ void setupDisplayAndFonts() {
   display.begin();
   renderer.begin();
   activityManager.begin();
+  // Tear down WiFi/web server before entering the reader to free heap for EPUB parsing.
+  activityManager.beforeOpenReader = []() { teardownDangerZone("opening reader"); };
   LOG_DBG("MAIN", "Display initialized");
 
   // Initialize font decompressor for compressed reader fonts
@@ -613,6 +625,7 @@ void setup() {
     APP_STATE.openEpubPath = "";
     APP_STATE.readerActivityLoadCount++;
     APP_STATE.saveToFile();
+    teardownDangerZone("opening epub on boot");
     activityManager.goToReader(path);
   }
 

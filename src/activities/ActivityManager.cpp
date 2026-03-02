@@ -182,6 +182,7 @@ void ActivityManager::goToBrowser() {
 }
 
 void ActivityManager::goToReader(std::string path) {
+  if (beforeOpenReader) beforeOpenReader();  // e.g. tear down WiFi to free heap
   replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path)));
 }
 
