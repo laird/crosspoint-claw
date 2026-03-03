@@ -8,6 +8,10 @@ Xteink firmware. It aims to match or improve upon the standard EPUB reading expe
 
 ![](./docs/images/cover.jpg)
 
+![CrossPoint home screen showing cover art and trip guide EPUBs on an Xteink X4](./docs/images/home-screen-trip-guides.jpg)
+
+*CrossPoint home screen displaying cover art for recent books alongside the navigation bar (version 1.1.1-claw b814906)*
+
 ## Motivation
 
 E-paper devices are fantastic for reading, but most commercially available readers are closed systems with limited 
