@@ -2,7 +2,7 @@
 # reader-push-firmware.sh — Build, verify, and push firmware to reader(s)
 #
 # Usage:
-#   scripts/reader-push-firmware.sh [--host laird|juliette|all] [--sync]
+#   scripts/reader-push-firmware.sh [--host laird|juliette|all] [--password <dz-password>] [--reboot] [--sync]
 #
 # Steps:
 #   1. pio run -e default
@@ -10,7 +10,8 @@
 #   3. Copy firmware.bin to feed server content dir
 #   4. Write version to feed server .version file
 #   5. Upload firmware.bin + firmware.version to reader(s)
-#   6. Optionally POST /api/feed/sync (--sync flag)
+#   6. Optionally POST /api/reboot with DZ auth (--reboot flag)
+#   7. Optionally POST /api/feed/sync (--sync flag)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,20 +25,31 @@ IP_JULIETTE="192.168.0.194"
 
 # Defaults
 HOST="laird"
+DZ_PASSWORD=""
+REBOOT=false
 SYNC=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --host) HOST="$2"; shift 2 ;;
-    --sync) SYNC=true; shift ;;
+    --host)     HOST="$2"; shift 2 ;;
+    --password) DZ_PASSWORD="$2"; shift 2 ;;
+    --reboot)   REBOOT=true; shift ;;
+    --sync)     SYNC=true; shift ;;
     -h|--help)
-      echo "Usage: $0 [--host laird|juliette|all] [--sync]"
-      echo "  --host    Target reader (default: laird)"
-      echo "  --sync    POST /api/feed/sync after upload"
+      echo "Usage: $0 [--host laird|juliette|all] [--password <dz-password>] [--reboot] [--sync]"
+      echo "  --host      Target reader (default: laird)"
+      echo "  --password  Danger Zone password for reboot"
+      echo "  --reboot    POST /api/reboot after upload (requires --password)"
+      echo "  --sync      POST /api/feed/sync after upload"
       exit 0 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
+
+if [ "$REBOOT" = true ] && [ -z "$DZ_PASSWORD" ]; then
+  echo "ERROR: --reboot requires --password <dz-password>"
+  exit 1
+fi
 
 # Resolve target IPs
 case "$HOST" in
@@ -97,14 +109,36 @@ for IP in "${TARGETS[@]}"; do
   curl -s --connect-timeout 5 -X POST "http://$IP/upload?path=/" \
     -F "file=@$VERSION_FILE;filename=firmware.version" 2>&1 || true
 
-  # Step 6: Trigger feed sync if requested
+  # Trigger feed sync if requested
   if [ "$SYNC" = true ]; then
     echo "    Triggering feed sync..."
     curl -s --connect-timeout 5 -X POST "http://$IP/api/feed/sync" 2>&1 || true
+  fi
+
+  # Reboot via DZ if requested
+  if [ "$REBOOT" = true ]; then
+    echo "    Rebooting reader..."
+    REBOOT_RESULT=$(curl -s --connect-timeout 5 -X POST "http://$IP/api/reboot" \
+      -H "X-Danger-Zone-Password: $DZ_PASSWORD" 2>&1) || true
+    echo "    $REBOOT_RESULT"
+    echo "    Waiting 45s for boot-time OTA + reboot..."
+    sleep 45
+    NEW_VERSION=$(curl -s --connect-timeout 5 "http://$IP/api/status" \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('version','?'))" 2>/dev/null || echo "unreachable")
+    echo "    Running version: $NEW_VERSION"
+    if [[ "$NEW_VERSION" == *"$VERSION"* ]] || [[ "$NEW_VERSION" == *"$(git rev-parse --short HEAD)"* ]]; then
+      echo "    ✓ Flash successful"
+    else
+      echo "    ✗ Version mismatch — flash may have rolled back"
+    fi
   fi
 
   echo ""
 done
 
 rm -f "$VERSION_FILE"
-echo "Done. DZ auto-flash will trigger on next boot if Danger Zone is enabled."
+if [ "$REBOOT" = false ]; then
+  echo "Done. Sleep/wake the reader to trigger boot-time OTA flash."
+else
+  echo "Done."
+fi
