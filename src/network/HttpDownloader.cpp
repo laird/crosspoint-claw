@@ -123,8 +123,8 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   http.setTimeout(120000);  // 2 min — 5.9 MB download over WiFi needs time
   http.addHeader("User-Agent", "CrossPoint-ESP32-" CROSSPOINT_VERSION);
 
-  // Add Basic HTTP auth if credentials are configured
-  if (strlen(SETTINGS.opdsUsername) > 0 && strlen(SETTINGS.opdsPassword) > 0) {
+  // Add Basic HTTP auth only for OPDS URLs (not for feed or firmware downloads)
+  if (strlen(SETTINGS.opdsUsername) > 0 && strlen(SETTINGS.opdsPassword) > 0 && strlen(SETTINGS.opdsServerUrl) > 0 && url.rfind(SETTINGS.opdsServerUrl, 0) == 0) {
     std::string credentials = std::string(SETTINGS.opdsUsername) + ":" + SETTINGS.opdsPassword;
     String encoded = base64::encode(credentials.c_str());
     http.addHeader("Authorization", "Basic " + encoded);
