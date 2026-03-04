@@ -118,43 +118,52 @@ void clawUpdateTask(void* /*arg*/) {
     return;
   }
 
-  // Parse JSON, filtering to only the fields we need
-  JsonDocument filter;
-  filter["tag_name"] = true;
-  filter["assets"][0]["name"] = true;
-  filter["assets"][0]["browser_download_url"] = true;
-  filter["assets"][0]["size"] = true;
-
-  JsonDocument doc;
-  const DeserializationError err =
-      deserializeJson(doc, apiJson, DeserializationOption::Filter(filter));
-  if (err) {
-    snprintf(s_clawError, sizeof(s_clawError), "JSON parse error: %s", err.c_str());
-    s_clawState = ClawUpdateState::ERROR;
-    s_clawTaskHandle = nullptr;
-    vTaskDelete(nullptr);
-    return;
-  }
-
-  // Find firmware.bin asset
+  // Parse JSON in a tight scope so apiJson, filter, and doc are freed before
+  // the firmware download begins. The HTTPS fetch above fragments the heap;
+  // freeing all JSON buffers here gives the TLS layer the best chance of
+  // finding a contiguous block for the download connection.
   std::string firmwareUrl;
-  for (int i = 0; i < (int)doc["assets"].size(); i++) {
-    if (doc["assets"][i]["name"] == "firmware.bin") {
-      firmwareUrl = doc["assets"][i]["browser_download_url"].as<std::string>();
-      s_clawTotal = doc["assets"][i]["size"].as<size_t>();
-      break;
-    }
-  }
-  if (firmwareUrl.empty()) {
-    snprintf(s_clawError, sizeof(s_clawError), "No firmware.bin asset found in release");
-    s_clawState = ClawUpdateState::ERROR;
-    s_clawTaskHandle = nullptr;
-    vTaskDelete(nullptr);
-    return;
-  }
+  {
+    JsonDocument filter;
+    filter["tag_name"] = true;
+    filter["assets"][0]["name"] = true;
+    filter["assets"][0]["browser_download_url"] = true;
+    filter["assets"][0]["size"] = true;
 
-  const std::string tagName = doc["tag_name"].as<std::string>();
-  snprintf(s_clawVersion, sizeof(s_clawVersion), "%s", tagName.c_str());
+    JsonDocument doc;
+    const DeserializationError err =
+        deserializeJson(doc, apiJson, DeserializationOption::Filter(filter));
+    if (err) {
+      snprintf(s_clawError, sizeof(s_clawError), "JSON parse error: %s", err.c_str());
+      s_clawState = ClawUpdateState::ERROR;
+      s_clawTaskHandle = nullptr;
+      vTaskDelete(nullptr);
+      return;
+    }
+
+    for (int i = 0; i < (int)doc["assets"].size(); i++) {
+      if (doc["assets"][i]["name"] == "firmware.bin") {
+        firmwareUrl = doc["assets"][i]["browser_download_url"].as<std::string>();
+        s_clawTotal = doc["assets"][i]["size"].as<size_t>();
+        break;
+      }
+    }
+    if (firmwareUrl.empty()) {
+      snprintf(s_clawError, sizeof(s_clawError), "No firmware.bin asset found in release");
+      s_clawState = ClawUpdateState::ERROR;
+      s_clawTaskHandle = nullptr;
+      vTaskDelete(nullptr);
+      return;
+    }
+
+    const std::string tagName = doc["tag_name"].as<std::string>();
+    snprintf(s_clawVersion, sizeof(s_clawVersion), "%s", tagName.c_str());
+  }  // apiJson, filter, doc all freed here — maximise contiguous heap for download
+
+  // Explicitly release apiJson storage (std::string doesn't shrink automatically)
+  { std::string().swap(apiJson); }
+
+  LOG_DBG("CLAWUPD", "Free heap before download: %zu bytes", esp_get_free_heap_size());
 
   // Download firmware to SD card (HttpDownloader follows GitHub's redirect)
   s_clawState = ClawUpdateState::DOWNLOADING;

@@ -63,9 +63,11 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   OtaEntry entry;
   entry.seq   = newSeq;
   memset(entry.label, 0xFF, sizeof(entry.label));
-  // ESP_OTA_IMG_PENDING_VERIFY (0x1): bootloader boots this once, then marks
-  // INVALID if app crashes before esp_ota_mark_app_valid_cancel_rollback().
-  entry.state = ESP_OTA_IMG_PENDING_VERIFY;
+  // When called from setup() (self-confirm), write VALID so the bootloader
+  // never rolls back.  When called during OTA, the caller passes the target
+  // partition — PENDING_VERIFY would be correct but VALID also works since
+  // the firmware will call forceSetBootPartition(self) on next boot anyway.
+  entry.state = ESP_OTA_IMG_VALID;
   // Use the official bootloader CRC function — guaranteed to match validation.
   // CRC covers ota_seq field only (4 bytes), per esp_flash_partitions.h comment.
   entry.crc = bootloader_common_ota_select_crc(
@@ -442,10 +444,15 @@ void dangerZoneAutoConnect() {
 }
 
 void setup() {
-  // MUST be first — confirms OTA firmware is healthy, cancels any pending rollback.
-  // Converts the PENDING_VERIFY otadata entry (written by crosspoint-flash.py or
-  // forceSetBootPartition) to VALID, preventing bootloader rollback on next boot.
-  esp_ota_mark_app_valid_cancel_rollback();
+  // MUST be first — confirms the running firmware is healthy.
+  // Bypasses esp_ota_mark_app_valid_cancel_rollback() because that function
+  // calls image_validate() internally, which FAILS for unsigned Arduino builds
+  // (no embedded SHA256) and then ABORTS the firmware + reboots.  Instead,
+  // write state=VALID directly into the otadata for the running partition.
+  {
+    const esp_partition_t* self = esp_ota_get_running_partition();
+    if (self) forceSetBootPartition(self);
+  }
 
   t1 = millis();
 
@@ -755,8 +762,8 @@ void setup() {
                 // Use forceSetBootPartition — bypasses esp_ota_set_boot_partition()'s
                 // image validation, which returns ESP_ERR_OTA_VALIDATE_FAILED for unsigned
                 // Arduino builds (no embedded SHA256). forceSetBootPartition writes the
-                // otadata entry directly with state=PENDING_VERIFY and correct CRC.
-                // esp_ota_mark_app_valid_cancel_rollback() in setup() confirms the boot.
+                // otadata entry directly with state=VALID and correct CRC.
+                // forceSetBootPartition(self) in setup() re-confirms on next boot.
                 err = forceSetBootPartition(updatePart);
                 if (err != ESP_OK) {
                   char errMsg[80];

@@ -44,7 +44,10 @@ static esp_err_t forceSetBootPartitionOta(const esp_partition_t* newPart) {
   OtaEntry entry;
   entry.seq = newSeq;
   memset(entry.label, 0xFF, sizeof(entry.label));
-  entry.state = ESP_OTA_IMG_PENDING_VERIFY;
+  // Write VALID directly — the next boot's forceSetBootPartition(self) will
+  // re-confirm anyway.  PENDING_VERIFY triggers image_validate() inside
+  // esp_ota_mark_app_valid_cancel_rollback(), which FAILS for unsigned builds.
+  entry.state = ESP_OTA_IMG_VALID;
   // Use official bootloader CRC — covers ota_seq field only (4 bytes)
   entry.crc = bootloader_common_ota_select_crc(
       reinterpret_cast<const esp_ota_select_entry_t*>(&entry));
