@@ -105,12 +105,10 @@ bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent) {
 
 HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& url, const std::string& destPath,
                                                              ProgressCallback progress) {
-  // Pre-check heap to avoid OOM crash mid-download. HTTPS needs ~50KB for TLS state,
-  // HTTP client needs ~20KB for buffer, leaving ~26KB for application. For safety,
-  // require 256KB free heap before starting download.
+  // HTTPS needs ~30KB for a TLS session + ~8KB HTTP buffer.
   const size_t freeHeap = esp_get_free_heap_size();
-  if (freeHeap < 256 * 1024) {
-    LOG_ERR("HTTP", "Insufficient heap for download: %zu bytes free (need ≥256KB)", freeHeap);
+  if (freeHeap < 50 * 1024) {
+    LOG_ERR("HTTP", "Insufficient heap for download: %zu bytes free (need ≥50KB)", freeHeap);
     return HTTP_ERROR;
   }
 

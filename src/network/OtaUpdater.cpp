@@ -3,11 +3,11 @@
 #include <ArduinoJson.h>
 #include <Logging.h>
 
+#include "bootloader_common.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
-#include "esp_rom_crc.h"
 #include "esp_wifi.h"
 
 // Mirrors forceSetBootPartition() in main.cpp — bypasses esp_ota_set_boot_partition()'s
@@ -44,8 +44,10 @@ static esp_err_t forceSetBootPartitionOta(const esp_partition_t* newPart) {
   OtaEntry entry;
   entry.seq = newSeq;
   memset(entry.label, 0xFF, sizeof(entry.label));
-  entry.state = 0x00000001;  // PENDING_VERIFY (flash-encoded)
-  entry.crc = ~esp_rom_crc32_le(0u, (const uint8_t*)&entry, 28);
+  entry.state = ESP_OTA_IMG_PENDING_VERIFY;
+  // Use official bootloader CRC — covers ota_seq field only (4 bytes)
+  entry.crc = bootloader_common_ota_select_crc(
+      reinterpret_cast<const esp_ota_select_entry_t*>(&entry));
 
   esp_err_t err = esp_partition_erase_range(otaPart, writeOffset, SECTOR_SIZE);
   if (err != ESP_OK) return err;
@@ -202,46 +204,13 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
 }
 
 bool OtaUpdater::isUpdateNewer() const {
-  if (!updateAvailable || latestVersion.empty() || latestVersion == CROSSPOINT_VERSION) {
+  if (!updateAvailable || latestVersion.empty()) {
     return false;
   }
-
-  int currentMajor, currentMinor, currentPatch;
-  int latestMajor, latestMinor, latestPatch;
-
-  const auto currentVersion = CROSSPOINT_VERSION;
-
-  // semantic version check (only match on 3 segments)
-  sscanf(latestVersion.c_str(), "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
-  sscanf(currentVersion, "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
-
-  /*
-   * Compare major versions.
-   * If they differ, return true if latest major version greater than current major version
-   * otherwise return false.
-   */
-  if (latestMajor != currentMajor) return latestMajor > currentMajor;
-
-  /*
-   * Compare minor versions.
-   * If they differ, return true if latest minor version greater than current minor version
-   * otherwise return false.
-   */
-  if (latestMinor != currentMinor) return latestMinor > currentMinor;
-
-  /*
-   * Check patch versions.
-   */
-  if (latestPatch != currentPatch) return latestPatch > currentPatch;
-
-  // If we reach here, it means all segments are equal.
-  // One final check, if we're on an RC build (contains "-rc"), we should consider the latest version as newer even if
-  // the segments are equal, since RC builds are pre-release versions.
-  if (strstr(currentVersion, "-rc") != nullptr) {
-    return true;
-  }
-
-  return false;
+  // Any version string that differs from the running firmware is considered
+  // an update. This prevents re-flashing identical firmware (flash-loop guard)
+  // while allowing both upgrades and downgrades.
+  return latestVersion != CROSSPOINT_VERSION;
 }
 
 const std::string& OtaUpdater::getLatestVersion() const { return latestVersion; }

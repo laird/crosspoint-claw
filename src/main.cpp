@@ -13,7 +13,7 @@
 #include <Update.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
-#include <rom/crc.h>
+#include <bootloader_common.h>
 
 // Direct OTA data partition write — bypasses esp_ota_set_boot_partition()'s image
 // validation, which fails for Arduino/unsigned builds lacking an embedded SHA256.
@@ -59,18 +59,17 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   bool writeToSector1 = (seq1 > seq0);
   uint32_t writeOffset = writeToSector1 ? SECTOR_SIZE : 0;
 
-  // Build the 32-byte entry; CRC covers only the 4-byte seq field (bootloader disassembly confirmed)
+  // Build the 32-byte entry matching esp_ota_select_entry_t layout
   OtaEntry entry;
   entry.seq   = newSeq;
   memset(entry.label, 0xFF, sizeof(entry.label));
-  // state: 0x1 = ESP_OTA_IMG_PENDING_VERIFY. The bootloader will boot this once;
-  // esp_ota_mark_app_valid_cancel_rollback() in setup() upgrades to 0x2 (VALID)
-  // on successful boot, preventing rollback on all subsequent boots.
-  entry.state = 0x00000001;
-  // CRC32 over the seq field only (4 bytes).
-  // Bootloader validates: esp_rom_crc32_le(UINT32_MAX, &entry.seq, 4) == entry.crc
-  // Confirmed from bootloader_common_ota_select_crc disassembly: li a2,4 (NOT 28).
-  entry.crc = crc32_le(0xFFFFFFFF, (const uint8_t*)&entry, 4);
+  // ESP_OTA_IMG_PENDING_VERIFY (0x1): bootloader boots this once, then marks
+  // INVALID if app crashes before esp_ota_mark_app_valid_cancel_rollback().
+  entry.state = ESP_OTA_IMG_PENDING_VERIFY;
+  // Use the official bootloader CRC function — guaranteed to match validation.
+  // CRC covers ota_seq field only (4 bytes), per esp_flash_partitions.h comment.
+  entry.crc = bootloader_common_ota_select_crc(
+      reinterpret_cast<const esp_ota_select_entry_t*>(&entry));
 
   LOG_INF("OTA", "forceSetBootPartition: part=%s seq=%lu→%lu sector=%lu",
           newPart->label, (unsigned long)maxSeq, (unsigned long)newSeq,
@@ -757,7 +756,7 @@ void setup() {
                 // image validation, which returns ESP_ERR_OTA_VALIDATE_FAILED for unsigned
                 // Arduino builds (no embedded SHA256). forceSetBootPartition writes the
                 // otadata entry directly with state=PENDING_VERIFY and correct CRC.
-                // earlyMarkOtaValid() (constructor 101) upgrades to VALID on successful boot.
+                // esp_ota_mark_app_valid_cancel_rollback() in setup() confirms the boot.
                 err = forceSetBootPartition(updatePart);
                 if (err != ESP_OK) {
                   char errMsg[80];
