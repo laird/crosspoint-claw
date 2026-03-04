@@ -90,7 +90,7 @@ bool isProtectedItemName(const String& name) {
 }
 
 // ---- Claw update download state ----
-enum class ClawUpdateState { IDLE, CHECKING, DOWNLOADING, READY, ERROR };
+using ClawUpdateState = CrossPointWebServer::ClawUpdateState;
 volatile ClawUpdateState s_clawState = ClawUpdateState::IDLE;
 volatile size_t s_clawDownloaded = 0;
 volatile size_t s_clawTotal = 0;
@@ -1895,6 +1895,16 @@ void CrossPointWebServer::handleGetClawUpdateStatus() const {
            "{\"state\":\"%s\",\"downloaded\":%zu,\"total\":%zu,\"version\":\"%s\",\"error\":\"%s\"}",
            stateStr, (size_t)s_clawDownloaded, (size_t)s_clawTotal, s_clawVersion, s_clawError);
   server->send(200, "application/json", buf);
+}
+
+CrossPointWebServer::ClawUpdateProgress CrossPointWebServer::getClawUpdateProgress() {
+  ClawUpdateProgress p;
+  p.state      = s_clawState;
+  p.downloaded = s_clawDownloaded;
+  p.total      = s_clawTotal;
+  p.version    = s_clawVersion;
+  p.error      = s_clawError;
+  return p;
 }
 
 void CrossPointWebServer::handleGetOtaStatus() const {

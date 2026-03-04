@@ -656,7 +656,9 @@ void setup() {
       snprintf(verBuf, sizeof(verBuf), "Running: %s", CROSSPOINT_VERSION);
       renderer.drawCenteredText(SMALL_FONT_ID, renderer.getScreenHeight() / 2 + 10, verBuf);
       renderer.displayBuffer(HalDisplay::FAST_REFRESH);
-      delay(5000);
+      delay(3000);
+      renderer.clearScreen();
+      renderer.displayBuffer(HalDisplay::FULL_REFRESH);  // wipe message before activity manager starts
       return;
     }
 
