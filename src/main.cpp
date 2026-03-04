@@ -916,6 +916,16 @@ void loop() {
     powerManager.setPowerSaving(false);  // Restore normal CPU frequency on user activity
   }
 
+  // Redraw when USB connection state changes (CHRG pill on/off)
+  {
+    static bool lastUsbState = gpio.isUsbConnected();
+    const bool usbNow = gpio.isUsbConnected();
+    if (usbNow != lastUsbState) {
+      lastUsbState = usbNow;
+      activityManager.requestUpdate();
+    }
+  }
+
   static bool screenshotButtonsReleased = true;
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.isPressed(HalGPIO::BTN_DOWN)) {
     if (screenshotButtonsReleased) {

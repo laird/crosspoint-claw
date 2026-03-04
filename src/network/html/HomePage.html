@@ -185,6 +185,10 @@
 
     <div class="card" id="dz-card" style="display:none">
       <h2>⚠️ Danger Zone</h2>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:12px">
+        <input id="dz-pw" type="password" placeholder="Danger Zone password" style="
+          padding:8px 12px;border:1px solid #ccc;border-radius:4px;font-size:1em;width:200px">
+      </div>
       <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center">
         <button id="dz-flash-btn" onclick="dzFlash()" style="
           padding:10px 20px;background:#e74c3c;color:white;border:none;
@@ -276,6 +280,13 @@
       } catch (e) {}
     }
 
+    function dzAuth() {
+      const pw = document.getElementById('dz-pw');
+      if (!pw) return {};
+      const v = pw.value;
+      return v ? {'X-Danger-Zone-Password': v} : {};
+    }
+
     async function flashFirmware() {
       const btn = document.getElementById('flash-btn');
       const status = document.getElementById('flash-status');
@@ -283,7 +294,7 @@
       btn.disabled = true;
       status.textContent = 'Flashing...';
       try {
-        const r = await fetch('/api/flash', { method: 'POST' });
+        const r = await fetch('/api/flash', { method: 'POST', headers: dzAuth() });
         if (r.ok) {
           status.textContent = 'Flashing in progress. Device will reboot...';
         } else {
@@ -314,7 +325,7 @@
       btn.disabled = true;
       status.textContent = 'Flashing...';
       try {
-        const r = await fetch('/api/flash', { method: 'POST' });
+        const r = await fetch('/api/flash', { method: 'POST', headers: dzAuth() });
         status.textContent = r.ok ? 'Flashing — device will reboot...' : (await r.text() || 'Failed');
         if (!r.ok) btn.disabled = false;
       } catch (e) {
@@ -330,7 +341,7 @@
       btn.disabled = true;
       status.textContent = 'Rebooting...';
       try {
-        await fetch('/api/reboot', { method: 'POST' });
+        await fetch('/api/reboot', { method: 'POST', headers: dzAuth() });
         status.textContent = 'Device rebooting...';
       } catch (e) {
         status.textContent = 'Sent.';
