@@ -162,6 +162,10 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   FileWriteStream fileStream(file, contentLength, progress);
   const int writeResult = http.writeToStream(&fileStream);
 
+  // Flush before closing to ensure data is written to the SD card.
+  // Without this, Storage.exists() might return false immediately after
+  // even though the file was written (FAT not yet updated on disk).
+  file.flush();
   file.close();
   http.end();
 
