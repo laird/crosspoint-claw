@@ -1886,7 +1886,9 @@ void CrossPointWebServer::handlePostClawUpdate() {
     return;
   }
   s_clawState = ClawUpdateState::CHECKING;
-  xTaskCreate(clawUpdateTask, "ClawUpdate", 8192, nullptr, 1, &s_clawTaskHandle);
+  // 16KB stack: 8KB was overflowing during the SSL→HTTPClient→SdFat write call chain
+  // when streaming a 6MB firmware binary (each SSL record decode + SD write adds frames).
+  xTaskCreate(clawUpdateTask, "ClawUpdate", 16384, nullptr, 1, &s_clawTaskHandle);
   server->send(200, "text/plain", "Claw update started");
 }
 
