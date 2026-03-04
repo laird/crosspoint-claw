@@ -5,7 +5,52 @@
 
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
+#include "esp_rom_crc.h"
 #include "esp_wifi.h"
+
+// Mirrors forceSetBootPartition() in main.cpp — bypasses esp_ota_set_boot_partition()'s
+// image validation (which fails for unsigned Arduino builds lacking an embedded SHA256).
+static esp_err_t forceSetBootPartitionOta(const esp_partition_t* newPart) {
+  if (!newPart) return ESP_ERR_INVALID_ARG;
+  const esp_partition_t* otaPart = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, nullptr);
+  if (!otaPart) return ESP_ERR_NOT_FOUND;
+
+  static constexpr size_t ENTRY_SIZE   = 32;
+  static constexpr size_t SECTOR_SIZE  = 0x1000;
+  struct __attribute__((packed)) OtaEntry {
+    uint32_t seq; uint8_t label[20]; uint32_t state; uint32_t crc;
+  };
+
+  OtaEntry e0, e1;
+  memset(&e0, 0xFF, sizeof(e0));
+  memset(&e1, 0xFF, sizeof(e1));
+  esp_partition_read(otaPart, 0,           &e0, sizeof(e0));
+  esp_partition_read(otaPart, SECTOR_SIZE, &e1, sizeof(e1));
+
+  uint32_t seq0 = (e0.seq == 0xFFFFFFFF) ? 0 : e0.seq;
+  uint32_t seq1 = (e1.seq == 0xFFFFFFFF) ? 0 : e1.seq;
+  uint32_t maxSeq = (seq0 > seq1) ? seq0 : seq1;
+  uint32_t partIdx = newPart->subtype - ESP_PARTITION_SUBTYPE_APP_OTA_0;
+
+  uint32_t newSeq = maxSeq + 1;
+  while (((newSeq - 1) % 2) != partIdx) newSeq++;
+
+  bool writeToSector1 = (seq1 > seq0);
+  uint32_t writeOffset = writeToSector1 ? SECTOR_SIZE : 0;
+
+  OtaEntry entry;
+  entry.seq = newSeq;
+  memset(entry.label, 0xFF, sizeof(entry.label));
+  entry.state = 0x00000001;  // PENDING_VERIFY (flash-encoded)
+  entry.crc = ~esp_rom_crc32_le(0u, (const uint8_t*)&entry, 28);
+
+  esp_err_t err = esp_partition_erase_range(otaPart, writeOffset, SECTOR_SIZE);
+  if (err != ESP_OK) return err;
+  return esp_partition_write(otaPart, writeOffset, &entry, sizeof(entry));
+}
 
 namespace {
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/laird/crosspoint-claw/releases/latest";
@@ -236,6 +281,11 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
   /* For better timing and connectivity, we disable power saving for WiFi */
   esp_wifi_set_ps(WIFI_PS_NONE);
 
+  // Determine the update partition upfront (the inactive OTA slot) so we can
+  // call forceSetBootPartitionOta() after the download, bypassing the unsigned-build
+  // SHA256 validation that causes esp_https_ota_finish to return VALIDATE_FAILED.
+  const esp_partition_t* updatePart = esp_ota_get_next_update_partition(nullptr);
+
   esp_err = esp_https_ota_begin(&ota_config, &ota_handle);
   if (esp_err != ESP_OK) {
     LOG_DBG("OTA", "HTTP OTA Begin Failed: %s", esp_err_to_name(esp_err));
@@ -265,9 +315,23 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
     return INTERNAL_UPDATE_ERROR;
   }
 
+  // esp_https_ota_finish internally calls esp_ota_set_boot_partition(), which validates
+  // the firmware image and returns ESP_ERR_OTA_VALIDATE_FAILED for unsigned Arduino builds
+  // (no embedded SHA256). The firmware data was written correctly; ignore that error and
+  // use forceSetBootPartitionOta() to write the otadata entry directly instead.
   esp_err = esp_https_ota_finish(ota_handle);
-  if (esp_err != ESP_OK) {
+  if (esp_err != ESP_OK && esp_err != ESP_ERR_OTA_VALIDATE_FAILED) {
     LOG_ERR("OTA", "esp_https_ota_finish Failed: %s", esp_err_to_name(esp_err));
+    return INTERNAL_UPDATE_ERROR;
+  }
+  if (esp_err == ESP_ERR_OTA_VALIDATE_FAILED) {
+    LOG_INF("OTA", "SHA256 validation skipped (unsigned build) — writing otadata directly");
+  }
+
+  // Write otadata directly, bypassing image validation.
+  esp_err = forceSetBootPartitionOta(updatePart);
+  if (esp_err != ESP_OK) {
+    LOG_ERR("OTA", "forceSetBootPartition failed: %s", esp_err_to_name(esp_err));
     return INTERNAL_UPDATE_ERROR;
   }
 

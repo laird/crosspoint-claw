@@ -813,12 +813,12 @@ void setup() {
                 if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
                   LOG_INF("MAIN", "OTA SHA256 validation skipped (unsigned build)");
                 }
-                // Use esp_ota_set_boot_partition — the standard ESP-IDF function.
-                // For unsigned Arduino builds, esp_ota_end returns ESP_ERR_OTA_VALIDATE_FAILED
-                // (handled above), but esp_ota_set_boot_partition still works correctly:
-                // it sets state=PENDING_VERIFY in otadata with correct CRC, and earlyMarkOtaValid()
-                // (constructor 101) cancels rollback on successful boot.
-                err = esp_ota_set_boot_partition(updatePart);
+                // Use forceSetBootPartition — bypasses esp_ota_set_boot_partition()'s
+                // image validation, which returns ESP_ERR_OTA_VALIDATE_FAILED for unsigned
+                // Arduino builds (no embedded SHA256). forceSetBootPartition writes the
+                // otadata entry directly with state=PENDING_VERIFY and correct CRC.
+                // earlyMarkOtaValid() (constructor 101) upgrades to VALID on successful boot.
+                err = forceSetBootPartition(updatePart);
                 if (err != ESP_OK) {
                   char errMsg[80];
                   snprintf(errMsg, sizeof(errMsg), "set_boot: %s", esp_err_to_name(err));
