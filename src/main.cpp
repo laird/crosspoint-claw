@@ -68,10 +68,15 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   OtaEntry entry;
   entry.seq   = newSeq;
   memset(entry.label, 0xFF, sizeof(entry.label));
-  entry.state = 0x00000002;  // ESP_OTA_IMG_VALID (0x1 = PENDING_VERIFY, 0x2 = VALID)
-  // crc32_le over the 28-byte body — same as zlib.crc32 in the flash script
-  // bootloader uses esp_rom_crc32_le(UINT32_MAX, data, 28) — must match exactly
-  entry.crc = crc32_le(0xFFFFFFFF, (const uint8_t*)&entry, 28);
+  // state: 0x00000001 = OTA_IMG_VALID in flash-encoded form (bit-erasure semantics).
+  // crosspoint-flash.py reference uses OTA_IMG_VALID = 0x00000001. The raw ESP-IDF enum
+  // (ESP_OTA_IMG_VALID = 0x2) is NOT the flash value — don't confuse the two.
+  entry.state = 0x00000001;
+  // CRC32 over first 28 bytes (seq + label + state).
+  // Must match: Python (zlib.crc32(data) ^ 0xFFFFFFFF)
+  // crc32_le(0xFFFFFFFF, data, n) = CRC32(seed=0) — WRONG init.
+  // ~crc32_le(0u, data, n) = ~(~CRC32(seed=0xFFFFFFFF)) = CRC32(seed=0xFFFFFFFF) — matches Python.
+  entry.crc = ~crc32_le(0u, (const uint8_t*)&entry, 28);
 
   LOG_INF("OTA", "forceSetBootPartition: part=%s seq=%lu→%lu sector=%lu",
           newPart->label, (unsigned long)maxSeq, (unsigned long)newSeq,
@@ -720,6 +725,10 @@ void setup() {
                 if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
                   LOG_INF("MAIN", "OTA SHA256 validation skipped (unsigned build)");
                 }
+                // Use custom forceSetBootPartition (not esp_ota_set_boot_partition) because
+                // the standard function validates the app SHA256 and fails for unsigned Arduino
+                // builds. forceSetBootPartition writes the otadata entry directly with correct
+                // state (0x1) and CRC, matching crosspoint-flash.py's verified format.
                 err = forceSetBootPartition(updatePart);
                 if (err != ESP_OK) {
                   char errMsg[80];
