@@ -55,8 +55,10 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   uint32_t newSeq = maxSeq + 1;
   while (((newSeq - 1) % numOta) != partIdx) newSeq++;
 
-  // Write to the sector with the lower (older) sequence number
-  bool writeToSector1 = (seq1 > seq0);
+  // Ping-pong: overwrite the sector with the OLDER (lower) sequence so that
+  // the other sector — which holds the current highest-seq entry — remains as
+  // a valid fallback if this write is interrupted.
+  bool writeToSector1 = (seq1 <= seq0);
   uint32_t writeOffset = writeToSector1 ? SECTOR_SIZE : 0;
 
   // Build the 32-byte entry matching esp_ota_select_entry_t layout
@@ -73,9 +75,11 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   entry.crc = bootloader_common_ota_select_crc(
       reinterpret_cast<const esp_ota_select_entry_t*>(&entry));
 
-  LOG_INF("OTA", "forceSetBootPartition: part=%s seq=%lu→%lu sector=%lu",
-          newPart->label, (unsigned long)maxSeq, (unsigned long)newSeq,
-          (unsigned long)(writeOffset / SECTOR_SIZE));
+  LOG_INF("OTA", "forceSetBootPartition: part=%s(@0x%lx) idx=%lu seq0=%lu seq1=%lu → newSeq=%lu sector=%lu",
+          newPart->label, (unsigned long)newPart->address,
+          (unsigned long)partIdx,
+          (unsigned long)seq0, (unsigned long)seq1,
+          (unsigned long)newSeq, (unsigned long)(writeOffset / SECTOR_SIZE));
 
   esp_err_t err = esp_partition_erase_range(otaPart, writeOffset, SECTOR_SIZE);
   if (err != ESP_OK) return err;

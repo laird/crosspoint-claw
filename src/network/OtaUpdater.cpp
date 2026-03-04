@@ -38,7 +38,10 @@ static esp_err_t forceSetBootPartitionOta(const esp_partition_t* newPart) {
   uint32_t newSeq = maxSeq + 1;
   while (((newSeq - 1) % 2) != partIdx) newSeq++;
 
-  bool writeToSector1 = (seq1 > seq0);
+  // Ping-pong: overwrite the sector with the OLDER (lower) sequence so that
+  // the other sector — which holds the current highest-seq entry — remains as
+  // a valid fallback if this write is interrupted.
+  bool writeToSector1 = (seq1 <= seq0);
   uint32_t writeOffset = writeToSector1 ? SECTOR_SIZE : 0;
 
   OtaEntry entry;
