@@ -77,7 +77,7 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   // esp_rom_crc32_le(0xFFFFFFFF, data, n) = crc32_le(0xFFFFFFFF, data, n) [no final XOR]
   // Python crosspoint-flash.py: zlib.crc32(data) ^ 0xFFFFFFFF
   // = (step2 ^ 0xFFFFFFFF) ^ 0xFFFFFFFF = step2 = crc32_le(0xFFFFFFFF, data, n) ✓
-  entry.crc = crc32_le(0xFFFFFFFF, (const uint8_t*)&entry, 28);
+  entry.crc = ~crc32_le(0u, (const uint8_t*)&entry, 28);
 
   LOG_INF("OTA", "forceSetBootPartition: part=%s seq=%lu→%lu sector=%lu",
           newPart->label, (unsigned long)maxSeq, (unsigned long)newSeq,
@@ -489,6 +489,16 @@ void setup() {
                            (resetReason == ESP_RST_POWERON)  ? "poweron"  :
                            (resetReason == ESP_RST_DEEPSLEEP)? "deepsleep": "other";
     Storage.mkdir("/.crosspoint");  // ensure hidden dir exists before writing logs
+
+    // Write current firmware version to hidden file (for scripts, feed server, etc.)
+    {
+      FsFile vf = Storage.open("/.crosspoint/version.txt", O_WRONLY | O_CREAT | O_TRUNC);
+      if (vf) {
+        vf.println(CROSSPOINT_VERSION);
+        vf.close();
+      }
+    }
+
     FsFile bootLog;
     // Rotate log if over 2KB
     {
@@ -743,11 +753,12 @@ void setup() {
                 if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
                   LOG_INF("MAIN", "OTA SHA256 validation skipped (unsigned build)");
                 }
-                // Use custom forceSetBootPartition (not esp_ota_set_boot_partition) because
-                // the standard function validates the app SHA256 and fails for unsigned Arduino
-                // builds. forceSetBootPartition writes the otadata entry directly with correct
-                // state (0x1) and CRC, matching crosspoint-flash.py's verified format.
-                err = forceSetBootPartition(updatePart);
+                // Use esp_ota_set_boot_partition — the standard ESP-IDF function.
+                // For unsigned Arduino builds, esp_ota_end returns ESP_ERR_OTA_VALIDATE_FAILED
+                // (handled above), but esp_ota_set_boot_partition still works correctly:
+                // it sets state=PENDING_VERIFY in otadata with correct CRC, and earlyMarkOtaValid()
+                // (constructor 101) cancels rollback on successful boot.
+                err = esp_ota_set_boot_partition(updatePart);
                 if (err != ESP_OK) {
                   char errMsg[80];
                   snprintf(errMsg, sizeof(errMsg), "set_boot: %s", esp_err_to_name(err));
