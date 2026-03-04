@@ -13,78 +13,11 @@
 #include <Update.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
-#include <rom/crc.h>
 
-// Run before global constructors to prevent OTA rollback even if a global crashes
+// Mark this firmware valid immediately on boot — cancels OTA rollback protection
+// so a subsequent reboot doesn't roll back to the previous firmware.
 __attribute__((constructor(101))) static void earlyMarkOtaValid() {
   esp_ota_mark_app_valid_cancel_rollback();
-}
-
-// Direct OTA data partition write — bypasses esp_ota_set_boot_partition()'s image
-// validation, which fails for Arduino/unsigned builds lacking an embedded SHA256.
-// Replicates the same otadata format as crosspoint-flash.py's make_entry().
-static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
-  if (!newPart) return ESP_ERR_INVALID_ARG;
-
-  const esp_partition_t* otaPart = esp_partition_find_first(
-    ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, nullptr);
-  if (!otaPart) return ESP_ERR_NOT_FOUND;
-
-  // OTA select entry: seq(4) + label(20) + state(4) + crc(4) = 32 bytes
-  static constexpr size_t ENTRY_SIZE = 32;
-  static constexpr size_t SECTOR_SIZE = 0x1000;
-
-  struct __attribute__((packed)) OtaEntry {
-    uint32_t seq;
-    uint8_t  label[20];
-    uint32_t state;
-    uint32_t crc;
-  };
-  static_assert(sizeof(OtaEntry) == ENTRY_SIZE, "");
-
-  OtaEntry e0, e1;
-  memset(&e0, 0xFF, sizeof(e0));
-  memset(&e1, 0xFF, sizeof(e1));
-  esp_partition_read(otaPart, 0,           &e0, sizeof(e0));
-  esp_partition_read(otaPart, SECTOR_SIZE, &e1, sizeof(e1));
-
-  uint32_t seq0 = (e0.seq == 0xFFFFFFFF) ? 0 : e0.seq;
-  uint32_t seq1 = (e1.seq == 0xFFFFFFFF) ? 0 : e1.seq;
-  uint32_t maxSeq = (seq0 > seq1) ? seq0 : seq1;
-
-  // Determine partition index (ota_0=0, ota_1=1) and number of OTA slots
-  uint32_t partIdx = newPart->subtype - ESP_PARTITION_SUBTYPE_APP_OTA_0;
-  uint32_t numOta = 2;  // standard 2-slot layout
-
-  // New seq must be > maxSeq and satisfy: (seq - 1) % numOta == partIdx
-  uint32_t newSeq = maxSeq + 1;
-  while (((newSeq - 1) % numOta) != partIdx) newSeq++;
-
-  // Write to the sector with the lower (older) sequence number
-  bool writeToSector1 = (seq1 > seq0);
-  uint32_t writeOffset = writeToSector1 ? SECTOR_SIZE : 0;
-
-  // Build the 32-byte entry; CRC covers first 28 bytes (seq + label + state)
-  OtaEntry entry;
-  entry.seq   = newSeq;
-  memset(entry.label, 0xFF, sizeof(entry.label));
-  // state: 0x00000001 = OTA_IMG_VALID in flash-encoded form (bit-erasure semantics).
-  // crosspoint-flash.py reference uses OTA_IMG_VALID = 0x00000001. The raw ESP-IDF enum
-  // (ESP_OTA_IMG_VALID = 0x2) is NOT the flash value — don't confuse the two.
-  entry.state = 0x00000001;
-  // CRC32 over first 28 bytes (seq + label + state).
-  // Must match: Python (zlib.crc32(data) ^ 0xFFFFFFFF)
-  // crc32_le(0xFFFFFFFF, data, n) = CRC32(seed=0) — WRONG init.
-  // ~crc32_le(0u, data, n) = ~(~CRC32(seed=0xFFFFFFFF)) = CRC32(seed=0xFFFFFFFF) — matches Python.
-  entry.crc = ~crc32_le(0u, (const uint8_t*)&entry, 28);
-
-  LOG_INF("OTA", "forceSetBootPartition: part=%s seq=%lu→%lu sector=%lu",
-          newPart->label, (unsigned long)maxSeq, (unsigned long)newSeq,
-          (unsigned long)(writeOffset / SECTOR_SIZE));
-
-  esp_err_t err = esp_partition_erase_range(otaPart, writeOffset, SECTOR_SIZE);
-  if (err != ESP_OK) return err;
-  return esp_partition_write(otaPart, writeOffset, &entry, sizeof(entry));
 }
 
 #include <builtinFonts/all.h>
@@ -725,11 +658,7 @@ void setup() {
                 if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
                   LOG_INF("MAIN", "OTA SHA256 validation skipped (unsigned build)");
                 }
-                // Use custom forceSetBootPartition (not esp_ota_set_boot_partition) because
-                // the standard function validates the app SHA256 and fails for unsigned Arduino
-                // builds. forceSetBootPartition writes the otadata entry directly with correct
-                // state (0x1) and CRC, matching crosspoint-flash.py's verified format.
-                err = forceSetBootPartition(updatePart);
+                err = esp_ota_set_boot_partition(updatePart);
                 if (err != ESP_OK) {
                   char errMsg[80];
                   snprintf(errMsg, sizeof(errMsg), "set_boot: %s", esp_err_to_name(err));
