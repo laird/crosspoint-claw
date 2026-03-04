@@ -12,6 +12,7 @@
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 
@@ -106,6 +107,17 @@ void clawUpdateTask(void* /*arg*/) {
   s_clawTotal = 0;
   s_clawVersion[0] = '\0';
   s_clawError[0] = '\0';
+
+  // Pre-check heap: HTTPS download needs ~50KB TLS + ~20KB HTTPClient.
+  // If less than 256KB available, abort to prevent OOM crash mid-download.
+  const size_t freeHeap = esp_get_free_heap_size();
+  if (freeHeap < 256 * 1024) {
+    snprintf(s_clawError, sizeof(s_clawError), "Insufficient heap (%zu KB, need ≥256KB)", freeHeap / 1024);
+    s_clawState = ClawUpdateState::ERROR;
+    s_clawTaskHandle = nullptr;
+    vTaskDelete(nullptr);
+    return;
+  }
 
   // Query GitHub API
   std::string apiJson;

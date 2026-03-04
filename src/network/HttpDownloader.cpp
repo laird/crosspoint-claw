@@ -6,6 +6,7 @@
 #include <NetworkClientSecure.h>
 #include <StreamString.h>
 #include <base64.h>
+#include <esp_heap_caps.h>
 
 #include <cstring>
 #include <memory>
@@ -104,6 +105,15 @@ bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent) {
 
 HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& url, const std::string& destPath,
                                                              ProgressCallback progress) {
+  // Pre-check heap to avoid OOM crash mid-download. HTTPS needs ~50KB for TLS state,
+  // HTTP client needs ~20KB for buffer, leaving ~26KB for application. For safety,
+  // require 256KB free heap before starting download.
+  const size_t freeHeap = esp_get_free_heap_size();
+  if (freeHeap < 256 * 1024) {
+    LOG_ERR("HTTP", "Insufficient heap for download: %zu bytes free (need ≥256KB)", freeHeap);
+    return HTTP_ERROR;
+  }
+
   // Use NetworkClientSecure for HTTPS, regular NetworkClient for HTTP
   std::unique_ptr<NetworkClient> client;
   if (UrlUtils::isHttpsUrl(url)) {
@@ -117,6 +127,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
 
   LOG_DBG("HTTP", "Downloading: %s", url.c_str());
   LOG_DBG("HTTP", "Destination: %s", destPath.c_str());
+  LOG_DBG("HTTP", "Free heap: %zu bytes", freeHeap);
 
   http.begin(*client, url.c_str());
   http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
