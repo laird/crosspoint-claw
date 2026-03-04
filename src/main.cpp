@@ -73,10 +73,11 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   // (ESP_OTA_IMG_VALID = 0x2) is NOT the flash value — don't confuse the two.
   entry.state = 0x00000001;
   // CRC32 over first 28 bytes (seq + label + state).
-  // Must match: Python (zlib.crc32(data) ^ 0xFFFFFFFF)
-  // crc32_le(0xFFFFFFFF, data, n) = CRC32(seed=0) — WRONG init.
-  // ~crc32_le(0u, data, n) = ~(~CRC32(seed=0xFFFFFFFF)) = CRC32(seed=0xFFFFFFFF) — matches Python.
-  entry.crc = ~crc32_le(0u, (const uint8_t*)&entry, 28);
+  // The bootloader validates: esp_rom_crc32_le(UINT32_MAX, data, 28) == entry.crc
+  // esp_rom_crc32_le(0xFFFFFFFF, data, n) = crc32_le(0xFFFFFFFF, data, n) [no final XOR]
+  // Python crosspoint-flash.py: zlib.crc32(data) ^ 0xFFFFFFFF
+  // = (step2 ^ 0xFFFFFFFF) ^ 0xFFFFFFFF = step2 = crc32_le(0xFFFFFFFF, data, n) ✓
+  entry.crc = crc32_le(0xFFFFFFFF, (const uint8_t*)&entry, 28);
 
   LOG_INF("OTA", "forceSetBootPartition: part=%s seq=%lu→%lu sector=%lu",
           newPart->label, (unsigned long)maxSeq, (unsigned long)newSeq,
