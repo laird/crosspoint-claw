@@ -126,6 +126,9 @@ class CrossPointWebServer {
   void handleGetFirmwareStatus() const;
   void handlePostClawUpdate();
   void handleGetClawUpdateStatus() const;
+  void handleGetOtaStatus() const;
+  void handlePostOtaCheck();
+  void handlePostOtaInstall();
   void handleGetLog(const char* path) const;
 
   // Check Danger Zone password from request header or query param

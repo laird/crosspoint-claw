@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include "../RecentBooksStore.h"
 #include "HttpDownloader.h"
+#include "OtaUpdater.h"
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
@@ -184,6 +185,84 @@ void clawUpdateTask(void* /*arg*/) {
   vTaskDelete(nullptr);
 }
 
+// ---- Remote OTA API state ----
+enum class OtaApiState { IDLE, CHECKING, UPDATE_AVAILABLE, NO_UPDATE, INSTALLING, COMPLETE, ERROR };
+volatile OtaApiState s_otaState = OtaApiState::IDLE;
+volatile size_t s_otaDownloaded = 0;
+volatile size_t s_otaTotal = 0;
+char s_otaLatestVersion[32] = {};
+char s_otaError[128] = {};
+TaskHandle_t s_otaCheckTaskHandle = nullptr;
+TaskHandle_t s_otaInstallTaskHandle = nullptr;
+
+void otaCheckTask(void* /*arg*/) {
+  s_otaLatestVersion[0] = '\0';
+  s_otaError[0] = '\0';
+
+  OtaUpdater updater(CLAW_RELEASE_API_URL);
+  const auto result = updater.checkForUpdate();
+  if (result != OtaUpdater::OK && result != OtaUpdater::NO_UPDATE) {
+    snprintf(s_otaError, sizeof(s_otaError), "Check failed (error %d)", (int)result);
+    s_otaState = OtaApiState::ERROR;
+    s_otaCheckTaskHandle = nullptr;
+    vTaskDelete(nullptr);
+    return;
+  }
+
+  snprintf(s_otaLatestVersion, sizeof(s_otaLatestVersion), "%s", updater.getLatestVersion().c_str());
+
+  if (!updater.isUpdateNewer()) {
+    s_otaState = OtaApiState::NO_UPDATE;
+  } else {
+    s_otaState = OtaApiState::UPDATE_AVAILABLE;
+  }
+
+  s_otaCheckTaskHandle = nullptr;
+  vTaskDelete(nullptr);
+}
+
+// Shared updater instance kept alive for the duration of an install.
+// Allocated in otaInstallTask, freed on task exit.
+static OtaUpdater* s_otaInstallUpdater = nullptr;
+
+void otaInstallTask(void* /*arg*/) {
+  s_otaDownloaded = 0;
+  s_otaTotal = 0;
+  s_otaError[0] = '\0';
+
+  OtaUpdater* updater = new OtaUpdater(CLAW_RELEASE_API_URL);
+  s_otaInstallUpdater = updater;
+
+  // Re-check so the updater has the URL and version info needed to install.
+  const auto checkResult = updater->checkForUpdate();
+  if (checkResult != OtaUpdater::OK) {
+    snprintf(s_otaError, sizeof(s_otaError), "Pre-install check failed (error %d)", (int)checkResult);
+    s_otaState = OtaApiState::ERROR;
+    delete updater;
+    s_otaInstallUpdater = nullptr;
+    s_otaInstallTaskHandle = nullptr;
+    vTaskDelete(nullptr);
+    return;
+  }
+
+  const auto installResult = updater->installUpdate([updater]() {
+    s_otaDownloaded = updater->getProcessedSize();
+    s_otaTotal = updater->getTotalSize();
+  });
+
+  if (installResult != OtaUpdater::OK) {
+    snprintf(s_otaError, sizeof(s_otaError), "Install failed (error %d)", (int)installResult);
+    s_otaState = OtaApiState::ERROR;
+  } else {
+    s_otaState = OtaApiState::COMPLETE;
+  }
+
+  delete updater;
+  s_otaInstallUpdater = nullptr;
+  s_otaInstallTaskHandle = nullptr;
+  vTaskDelete(nullptr);
+}
+
 }  // namespace
 
 // File listing page template - now using generated headers:
@@ -279,6 +358,9 @@ void CrossPointWebServer::begin() {
   server->on("/api/firmware-status", HTTP_GET, [this] { handleGetFirmwareStatus(); });
   server->on("/api/claw-update", HTTP_POST, [this] { handlePostClawUpdate(); });
   server->on("/api/claw-update/status", HTTP_GET, [this] { handleGetClawUpdateStatus(); });
+  server->on("/api/ota/check", HTTP_POST, [this] { handlePostOtaCheck(); });
+  server->on("/api/ota/install", HTTP_POST, [this] { handlePostOtaInstall(); });
+  server->on("/api/ota/status", HTTP_GET, [this] { handleGetOtaStatus(); });
   server->on("/api/boot-log", HTTP_GET, [this] { handleGetLog("/.crosspoint/boot.log"); });
   server->on("/api/feed/log", HTTP_GET, [this] { handleGetLog("/.crosspoint/feed-sync.log"); });
 
@@ -1813,5 +1895,59 @@ void CrossPointWebServer::handleGetClawUpdateStatus() const {
            "{\"state\":\"%s\",\"downloaded\":%zu,\"total\":%zu,\"version\":\"%s\",\"error\":\"%s\"}",
            stateStr, (size_t)s_clawDownloaded, (size_t)s_clawTotal, s_clawVersion, s_clawError);
   server->send(200, "application/json", buf);
+}
+
+void CrossPointWebServer::handleGetOtaStatus() const {
+  const char* stateStr;
+  switch (s_otaState) {
+    case OtaApiState::IDLE:             stateStr = "idle";             break;
+    case OtaApiState::CHECKING:         stateStr = "checking";         break;
+    case OtaApiState::UPDATE_AVAILABLE: stateStr = "update_available"; break;
+    case OtaApiState::NO_UPDATE:        stateStr = "no_update";        break;
+    case OtaApiState::INSTALLING:       stateStr = "installing";       break;
+    case OtaApiState::COMPLETE:         stateStr = "complete";         break;
+    case OtaApiState::ERROR:            stateStr = "error";            break;
+    default:                            stateStr = "unknown";          break;
+  }
+  char buf[256];
+  snprintf(buf, sizeof(buf),
+           "{\"state\":\"%s\",\"latestVersion\":\"%s\",\"currentVersion\":\"%s\","
+           "\"downloaded\":%zu,\"total\":%zu,\"error\":\"%s\"}",
+           stateStr, s_otaLatestVersion, CROSSPOINT_VERSION,
+           (size_t)s_otaDownloaded, (size_t)s_otaTotal, s_otaError);
+  server->send(200, "application/json", buf);
+}
+
+void CrossPointWebServer::handlePostOtaCheck() {
+  if (!checkDangerZoneAuth()) {
+    server->send(403, "text/plain", "Forbidden: Danger Zone not enabled or bad password");
+    return;
+  }
+  if (s_otaState == OtaApiState::CHECKING || s_otaState == OtaApiState::INSTALLING) {
+    server->send(409, "text/plain", "OTA operation already in progress");
+    return;
+  }
+  s_otaState = OtaApiState::CHECKING;
+  s_otaLatestVersion[0] = '\0';
+  s_otaError[0] = '\0';
+  xTaskCreate(otaCheckTask, "OtaCheck", 4096, nullptr, 1, &s_otaCheckTaskHandle);
+  server->send(200, "text/plain", "OTA check started");
+}
+
+void CrossPointWebServer::handlePostOtaInstall() {
+  if (!checkDangerZoneAuth()) {
+    server->send(403, "text/plain", "Forbidden: Danger Zone not enabled or bad password");
+    return;
+  }
+  if (s_otaState != OtaApiState::UPDATE_AVAILABLE) {
+    server->send(409, "text/plain", "No update available — run /api/ota/check first");
+    return;
+  }
+  s_otaState = OtaApiState::INSTALLING;
+  s_otaDownloaded = 0;
+  s_otaTotal = 0;
+  s_otaError[0] = '\0';
+  xTaskCreate(otaInstallTask, "OtaInstall", 8192, nullptr, 1, &s_otaInstallTaskHandle);
+  server->send(200, "text/plain", "OTA install started");
 }
 
