@@ -117,6 +117,9 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     const int segH       = zoneH / NUM_SEGS;
     const int pillW      = LEFT_W - SEG_MARGIN - (SEG_MARGIN + PILL_LEFT);
     const int pillX      = SEG_MARGIN + PILL_LEFT;
+    // Pill height: divide segment evenly among up to MAX_PILLS pills
+    constexpr int MAX_PILLS  = 4;
+    const int pillH = (segH - SEG_MARGIN * 2 - PILL_GAP * (MAX_PILLS - 1)) / MAX_PILLS;
 
     // ── Separator lines between segments ──────────────────────────────────────
     for (int i = 1; i < NUM_SEGS; i++) {
@@ -130,10 +133,6 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     // ─────────────────────────────────────────────────────────────────────────
     {
       const int seg0Top = zoneTop;
-      // Determine pill height: divide segment evenly among up to 4 pills
-      constexpr int MAX_PILLS  = 4;
-      const int totalGap = PILL_GAP * (MAX_PILLS - 1);
-      const int pillH    = (segH - SEG_MARGIN * 2 - totalGap) / MAX_PILLS;
 
       int pillY = seg0Top + SEG_MARGIN;
 
@@ -230,8 +229,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Seg 1 & 2: Up/Down — white filled triangles near the dividing line
-    // Base close to divider, tip pointing away.  Sized ~= pill width.
+    // Seg 1 & 2: Up/Down arrows + CHRG pill at bottom of Seg 2
     // ─────────────────────────────────────────────────────────────────────────
     {
       const int divY   = zoneTop + segH * 2;  // divider between seg1 and seg2
@@ -253,37 +251,37 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         const int y  = divY + GAP + TRI_H - row;
         renderer.drawLine(cx - hw, y, cx + hw, y, /*black=*/false);
       }
-    }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Seg 3: CHRG pill (when USB connected) + Battery bar + percentage
-    // ─────────────────────────────────────────────────────────────────────────
-    {
-      const int seg3Top = zoneTop + segH * 3;
-      const uint16_t pct = powerManager.getBatteryPercentage();
+      // CHRG pill — bottom of Seg 2, just above the Seg 2/3 divider
       const bool usbConnected = (digitalRead(20) == HIGH);
-
-      // CHRG pill at top of segment
-      constexpr int CHRG_PILL_H = 18;
-      const int chrgY = seg3Top + SEG_MARGIN;
       if (usbConnected) {
-        renderer.fillRoundedRect(pillX, chrgY, pillW, CHRG_PILL_H, PILL_R, Color::LightGray);
+        const int seg2Bottom = zoneTop + segH * 3;  // = seg3 top = seg2/3 divider
+        const int chrgY = seg2Bottom - SEG_MARGIN - pillH;
+        renderer.fillRoundedRect(pillX, chrgY, pillW, pillH, PILL_R, Color::LightGray);
         const char* lbl = "CHRG";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
         renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2,
-                          chrgY + (CHRG_PILL_H - lh) / 2, lbl, /*black=*/true);
+                          chrgY + (pillH - lh) / 2, lbl, /*black=*/true);
       }
+    }
 
-      // Battery bar geometry — shifted down to make room for CHRG pill
+    // ─────────────────────────────────────────────────────────────────────────
+    // Seg 3: Battery — vertical fill bar (white fill = charged) + percentage
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+      const int seg3Top = zoneTop + segH * 3;
+      const uint16_t pct = powerManager.getBatteryPercentage();
+
+      // Battery bar geometry
       constexpr int BAR_MARGIN_X = 18;
+      constexpr int BAR_MARGIN_TOP = 8;
       constexpr int BAR_MARGIN_BOT = 20;  // leave room for percentage text
       constexpr int BAR_R = 3;
-      const int barTopOffset = SEG_MARGIN + CHRG_PILL_H + PILL_GAP;
       const int barX = BAR_MARGIN_X;
-      const int barY = seg3Top + barTopOffset;
+      const int barY = seg3Top + BAR_MARGIN_TOP;
       const int barW = LEFT_W - BAR_MARGIN_X * 2;
-      const int barH = segH - barTopOffset - BAR_MARGIN_BOT;
+      const int barH = segH - BAR_MARGIN_TOP - BAR_MARGIN_BOT;
 
       // Outline
       renderer.drawRoundedRect(barX, barY, barW, barH, 1, BAR_R, /*black=*/false);
