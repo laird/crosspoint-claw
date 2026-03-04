@@ -56,7 +56,11 @@ __attribute__((constructor(101))) static void earlyMarkOtaValid() {
   for (int s = 0; s < 2; s++) {
     if (e[s].seq == 0xFFFFFFFF) continue;
     if ((e[s].seq - 1) % numOta != partIdx) continue;
-    if (e[s].state == OTA_IMG_VALID) return;  // already valid, nothing to do
+    // Check both state AND CRC validity — a VALID entry with wrong CRC is still
+    // rejected by the bootloader, so we must fix it even if state looks correct.
+    uint32_t storedCrc   = e[s].crc;
+    uint32_t expectedCrc = crc32_le(0xFFFFFFFF, (const uint8_t*)&e[s], 4);
+    if (e[s].state == OTA_IMG_VALID && storedCrc == expectedCrc) return;
     activeSector = s;
     break;
   }
@@ -67,7 +71,7 @@ __attribute__((constructor(101))) static void earlyMarkOtaValid() {
   OtaEntry newEntry = e[activeSector];
   newEntry.seq   = e[activeSector].seq + 2;  // same partIdx, higher seq → wins
   newEntry.state = OTA_IMG_VALID;
-  newEntry.crc   = crc32_le(0xFFFFFFFF, (const uint8_t*)&newEntry, 28);
+  newEntry.crc   = crc32_le(0xFFFFFFFF, (const uint8_t*)&newEntry, 4);  // seq field only
   uint32_t altOff = (uint32_t)altSector * SECTOR_SIZE;
 
   // Only erase the alternate sector if it contains stale data (not already empty)
@@ -122,7 +126,7 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   bool writeToSector1 = (seq1 > seq0);
   uint32_t writeOffset = writeToSector1 ? SECTOR_SIZE : 0;
 
-  // Build the 32-byte entry; CRC covers first 28 bytes (seq + label + state)
+  // Build the 32-byte entry; CRC covers only the 4-byte seq field (bootloader disassembly confirmed)
   OtaEntry entry;
   entry.seq   = newSeq;
   memset(entry.label, 0xFF, sizeof(entry.label));
@@ -130,10 +134,10 @@ static esp_err_t forceSetBootPartition(const esp_partition_t* newPart) {
   // earlyMarkOtaValid() (constructor 101) upgrades to 0x2 (VALID) on successful boot,
   // preventing rollback on all subsequent boots.
   entry.state = 0x00000001;
-  // CRC32 over first 28 bytes (seq + label + state).
-  // Bootloader validates: esp_rom_crc32_le(UINT32_MAX, data, 28) == entry.crc
-  // crosspoint-flash.py: crc = zlib.crc32(data) ^ 0xFFFFFFFF = crc32_le(0xFFFFFFFF, data, 28)
-  entry.crc = crc32_le(0xFFFFFFFF, (const uint8_t*)&entry, 28);
+  // CRC32 over the seq field only (4 bytes).
+  // Bootloader validates: esp_rom_crc32_le(UINT32_MAX, &entry.seq, 4) == entry.crc
+  // Confirmed from bootloader_common_ota_select_crc disassembly: li a2,4 (NOT 28).
+  entry.crc = crc32_le(0xFFFFFFFF, (const uint8_t*)&entry, 4);
 
   LOG_INF("OTA", "forceSetBootPartition: part=%s seq=%lu→%lu sector=%lu",
           newPart->label, (unsigned long)maxSeq, (unsigned long)newSeq,
@@ -506,6 +510,11 @@ void dangerZoneAutoConnect() {
 }
 
 void setup() {
+  // MUST be first — confirms OTA firmware is healthy, cancels any pending rollback.
+  // earlyMarkOtaValid() (constructor 101) already wrote a VALID otadata entry before
+  // setup() runs, so this call is a belt-and-suspenders guard for the standard path.
+  esp_ota_mark_app_valid_cancel_rollback();
+
   t1 = millis();
 
   gpio.begin();
