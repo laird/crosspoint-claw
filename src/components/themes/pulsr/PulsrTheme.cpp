@@ -14,7 +14,17 @@
 #include "CrossPointSettings.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
+#include "components/icons/book24.h"
 #include "components/icons/cover.h"
+#include "components/icons/file24.h"
+#include "components/icons/folder24.h"
+#include "components/icons/hotspot.h"
+#include "components/icons/image24.h"
+#include "components/icons/recent.h"
+#include "components/icons/settings2.h"
+#include "components/icons/text24.h"
+#include "components/icons/transfer.h"
+#include "components/icons/wifi.h"
 #include "fontIds.h"
 
 // File-scope alias so method bodies can reference PulsrMetrics concisely.
@@ -325,6 +335,34 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const st
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Icon bitmap lookup for drawList rows (24px).
+static const uint8_t* pulsrListIcon(UIIcon icon) {
+  switch (icon) {
+    case UIIcon::Folder:
+      return Folder24Icon;
+    case UIIcon::Text:
+      return Text24Icon;
+    case UIIcon::Image:
+      return Image24Icon;
+    case UIIcon::Book:
+      return Book24Icon;
+    case UIIcon::File:
+      return File24Icon;
+    case UIIcon::Recent:
+      return RecentIcon;
+    case UIIcon::Settings:
+      return Settings2Icon;
+    case UIIcon::Transfer:
+      return TransferIcon;
+    case UIIcon::Wifi:
+      return WifiIcon;
+    case UIIcon::Hotspot:
+      return HotspotIcon;
+    default:
+      return nullptr;
+  }
+}
+
 // drawList  –  Paged list of items with optional subtitle / value / icon.
 // Selected row: light-gray fill + left-edge indicator bar.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -384,9 +422,22 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
       valueW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X;
     }
 
-    // Title text
-    const int titleX = cr.x + SEL_BAR_W + LIST_PAD_X;
-    const int titleMaxW = contentW - SEL_BAR_W - LIST_PAD_X * 2 - valueW;
+    // Icon (optional) — 24×24, vertically centered, drawn left of title
+    constexpr int ICON_SZ = 24;
+    int iconW = 0;
+    if (rowIcon != nullptr) {
+      const uint8_t* bmp = pulsrListIcon(rowIcon(i));
+      if (bmp != nullptr) {
+        iconW = ICON_SZ + LIST_PAD_X;
+        const int iconX = cr.x + SEL_BAR_W + LIST_PAD_X;
+        const int iconY = itemY + (rowH - ICON_SZ) / 2;
+        renderer.drawIcon(bmp, iconX, iconY, ICON_SZ, ICON_SZ);
+      }
+    }
+
+    // Title text (offset right if icon present)
+    const int titleX = cr.x + SEL_BAR_W + LIST_PAD_X + iconW;
+    const int titleMaxW = contentW - SEL_BAR_W - LIST_PAD_X * 2 - valueW - iconW;
     const int titleH = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int titleY = rowSubtitle != nullptr ? itemY + 5 : itemY + (rowH - titleH) / 2;
 

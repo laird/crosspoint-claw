@@ -89,12 +89,12 @@ void SettingsActivity::loop() {
 
   // Up/Down navigate the settings list
   if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-    selectedSettingIndex = ButtonNavigator::nextIndex(selectedSettingIndex, settingsCount);
+    selectedSettingIndex = ButtonNavigator::nextIndex(selectedSettingIndex, settingsCount + 1);
     requestUpdate();
   }
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
-    selectedSettingIndex = ButtonNavigator::previousIndex(selectedSettingIndex, settingsCount);
+    selectedSettingIndex = ButtonNavigator::previousIndex(selectedSettingIndex, settingsCount + 1);
     requestUpdate();
   }
 
