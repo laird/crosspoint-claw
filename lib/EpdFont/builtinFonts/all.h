@@ -2,6 +2,9 @@
 
 #include <builtinFonts/antonio_10_regular.h>
 #include <builtinFonts/antonio_12_regular.h>
+#include <builtinFonts/antonio_14_regular.h>
+#include <builtinFonts/antonio_16_regular.h>
+#include <builtinFonts/antonio_18_regular.h>
 #include <builtinFonts/bookerly_12_bold.h>
 #include <builtinFonts/bookerly_12_bolditalic.h>
 #include <builtinFonts/bookerly_12_italic.h>

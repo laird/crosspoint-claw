@@ -38,6 +38,15 @@ EpdFont pulsr10Font(&antonio_10_regular);
 EpdFontFamily pulsr10FontFamily(&pulsr10Font);
 EpdFont pulsr12Font(&antonio_12_regular);
 EpdFontFamily pulsr12FontFamily(&pulsr12Font);
+// Antonio reading sizes (Regular only — no bold/italic variants)
+EpdFont antonio12Font(&antonio_12_regular);
+EpdFontFamily antonio12FontFamily(&antonio12Font);
+EpdFont antonio14Font(&antonio_14_regular);
+EpdFontFamily antonio14FontFamily(&antonio14Font);
+EpdFont antonio16Font(&antonio_16_regular);
+EpdFontFamily antonio16FontFamily(&antonio16Font);
+EpdFont antonio18Font(&antonio_18_regular);
+EpdFontFamily antonio18FontFamily(&antonio18Font);
 EpdFont bookerly14RegularFont(&bookerly_14_regular);
 EpdFont bookerly14BoldFont(&bookerly_14_bold);
 EpdFont bookerly14ItalicFont(&bookerly_14_italic);
@@ -227,6 +236,11 @@ void setupDisplayAndFonts() {
   // PULSR theme fonts are always registered (required for Pulsr theme chrome)
   renderer.insertFont(PULSR_10_FONT_ID, pulsr10FontFamily);
   renderer.insertFont(PULSR_12_FONT_ID, pulsr12FontFamily);
+  // Antonio reading font sizes
+  renderer.insertFont(ANTONIO_12_FONT_ID, antonio12FontFamily);
+  renderer.insertFont(ANTONIO_14_FONT_ID, antonio14FontFamily);
+  renderer.insertFont(ANTONIO_16_FONT_ID, antonio16FontFamily);
+  renderer.insertFont(ANTONIO_18_FONT_ID, antonio18FontFamily);
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);

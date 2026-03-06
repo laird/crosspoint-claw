@@ -341,5 +341,17 @@ int CrossPointSettings::getReaderFontId() const {
         case EXTRA_LARGE:
           return OPENDYSLEXIC_14_FONT_ID;
       }
+    case ANTONIO:
+      switch (fontSize) {
+        case SMALL:
+          return ANTONIO_12_FONT_ID;
+        case MEDIUM:
+        default:
+          return ANTONIO_14_FONT_ID;
+        case LARGE:
+          return ANTONIO_16_FONT_ID;
+        case EXTRA_LARGE:
+          return ANTONIO_18_FONT_ID;
+      }
   }
 }
