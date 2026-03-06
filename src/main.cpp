@@ -118,12 +118,13 @@ EpdFontFamily opendyslexic14FontFamily(&opendyslexic14RegularFont, &opendyslexic
 EpdFont smallFont(&notosans_8_regular);
 EpdFontFamily smallFontFamily(&smallFont);
 
-EpdFont ui10RegularFont(&ubuntu_10_regular);
-EpdFont ui10BoldFont(&ubuntu_10_bold);
+// PULSR theme: Antonio replaces Ubuntu as the UI font
+EpdFont ui10RegularFont(&antonio_10_regular);
+EpdFont ui10BoldFont(&antonio_10_regular);  // Antonio has no separate bold; use regular
 EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont);
 
-EpdFont ui12RegularFont(&ubuntu_12_regular);
-EpdFont ui12BoldFont(&ubuntu_12_bold);
+EpdFont ui12RegularFont(&antonio_12_regular);
+EpdFont ui12BoldFont(&antonio_12_regular);  // Antonio has no separate bold; use regular
 EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
 
 // measurement of power button press duration calibration value
