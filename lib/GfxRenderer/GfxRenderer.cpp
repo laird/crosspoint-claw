@@ -1015,6 +1015,15 @@ int GfxRenderer::getTextHeight(const int fontId) const {
   return fontIt->second.getData(EpdFontFamily::REGULAR)->ascender;
 }
 
+
+int GfxRenderer::getCapHeight(const int fontId) const {
+  const auto fontIt = fontMap.find(fontId);
+  if (fontIt == fontMap.end()) return 0;
+  // Use glyph 'H' (U+0048) top value as a reliable cap-height proxy.
+  const EpdGlyph* g = fontIt->second.getGlyph(0x48, EpdFontFamily::REGULAR);
+  return (g != nullptr) ? g->top : fontIt->second.getData(EpdFontFamily::REGULAR)->ascender;
+}
+
 void GfxRenderer::drawTextRotated90CW(const int fontId, const int x, const int y, const char* text, const bool black,
                                       const EpdFontFamily::Style style) const {
   // Cannot draw a NULL / empty string

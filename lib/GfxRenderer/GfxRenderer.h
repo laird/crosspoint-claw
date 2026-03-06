@@ -130,6 +130,7 @@ class GfxRenderer {
   void drawTextRotated90CW(int fontId, int x, int y, const char* text, bool black = true,
                            EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   int getTextHeight(int fontId) const;
+  int getCapHeight(int fontId) const;  ///< Height of uppercase letter (e.g. 'H'), for visual centering
 
   // Grayscale functions
   void setRenderMode(const RenderMode mode) { this->renderMode = mode; }
