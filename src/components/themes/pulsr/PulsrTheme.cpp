@@ -191,11 +191,16 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const st
   const int barH = TOP_H;
 
   for (int i = 0; i < tabCount; i++) {
-    // Abbreviate label: uppercase, max 4 chars
+    // Abbreviate label: uppercase, max 4 ASCII codepoints.
+    // Tab labels are expected to be ASCII; non-ASCII labels should provide
+    // a pre-abbreviated shortLabel via the tab structure instead.
     const char* full = tabs[i].label;
     char abbr[5] = {0};
-    for (int c = 0; c < 4 && full[c] != '\0'; c++) {
-      abbr[c] = (full[c] >= 'a' && full[c] <= 'z') ? full[c] - 32 : full[c];
+    int abbrLen = 0;
+    for (int c = 0; full[c] != '\0' && abbrLen < 4; c++) {
+      unsigned char ch = static_cast<unsigned char>(full[c]);
+      if (ch > 0x7F) break;  // Stop at first non-ASCII byte
+      abbr[abbrLen++] = (ch >= 'a' && ch <= 'z') ? ch - 32 : ch;
     }
     // "Controls" → "CONT" is ambiguous; override to the universal abbreviation
     if (abbr[0] == 'C' && abbr[1] == 'O' && abbr[2] == 'N' && abbr[3] == 'T') {
@@ -560,7 +565,11 @@ void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t 
   // Percentage label centered below bar
   char pctBuf[8];
   snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
-  renderer.drawCenteredText(PULSR_10_FONT_ID, cr.y + cr.height + 10, pctBuf);
+  {
+    const int pctW = renderer.getTextWidth(PULSR_10_FONT_ID, pctBuf);
+    const int pctX = cr.x + (cr.width - pctW) / 2;
+    renderer.drawText(PULSR_10_FONT_ID, pctX, cr.y + cr.height + 10, pctBuf);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

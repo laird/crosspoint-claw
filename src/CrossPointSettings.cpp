@@ -19,6 +19,15 @@ void readAndValidate(FsFile& file, uint8_t& member, const uint8_t maxValue) {
   if (tempValue < maxValue) {
     member = tempValue;
   }
+  // If tempValue >= maxValue, member retains its default (safe fallback)
+}
+
+// Clamp all enum settings to valid ranges after loading, so stale NVS values
+// from older firmware versions never leave the device in an unreadable state.
+void CrossPointSettings::clampToValidRanges() {
+  if (fontFamily >= FONT_FAMILY_COUNT) fontFamily = BOOKERLY;
+  if (fontSize >= FONT_SIZE_COUNT) fontSize = MEDIUM;
+  if (uiTheme >= UI_THEME_COUNT) uiTheme = CLASSIC;
 }
 
 namespace {
@@ -331,17 +340,6 @@ int CrossPointSettings::getReaderFontId() const {
           return OPENDYSLEXIC_12_FONT_ID;
         case EXTRA_LARGE:
           return OPENDYSLEXIC_14_FONT_ID;
-      }
-    case PULSR_FONT:
-      // PULSR font only has 10 and 12 sizes; map all sizes to closest available
-      switch (fontSize) {
-        case SMALL:
-        case MEDIUM:
-        default:
-          return PULSR_10_FONT_ID;
-        case LARGE:
-        case EXTRA_LARGE:
-          return PULSR_12_FONT_ID;
       }
   }
 }

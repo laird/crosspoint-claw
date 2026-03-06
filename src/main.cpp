@@ -119,12 +119,12 @@ EpdFont smallFont(&notosans_8_regular);
 EpdFontFamily smallFontFamily(&smallFont);
 
 // PULSR theme: Antonio replaces Ubuntu as the UI font
-EpdFont ui10RegularFont(&antonio_10_regular);
-EpdFont ui10BoldFont(&antonio_10_regular);  // Antonio has no separate bold; use regular
+EpdFont ui10RegularFont(&ubuntu_10_regular);
+EpdFont ui10BoldFont(&ubuntu_10_bold);
 EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont);
 
-EpdFont ui12RegularFont(&antonio_12_regular);
-EpdFont ui12BoldFont(&antonio_12_regular);  // Antonio has no separate bold; use regular
+EpdFont ui12RegularFont(&ubuntu_12_regular);
+EpdFont ui12BoldFont(&ubuntu_12_bold);
 EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
 
 // measurement of power button press duration calibration value
@@ -223,9 +223,10 @@ void setupDisplayAndFonts() {
   renderer.insertFont(OPENDYSLEXIC_10_FONT_ID, opendyslexic10FontFamily);
   renderer.insertFont(OPENDYSLEXIC_12_FONT_ID, opendyslexic12FontFamily);
   renderer.insertFont(OPENDYSLEXIC_14_FONT_ID, opendyslexic14FontFamily);
+#endif  // OMIT_FONTS
+  // PULSR theme fonts are always registered (required for Pulsr theme chrome)
   renderer.insertFont(PULSR_10_FONT_ID, pulsr10FontFamily);
   renderer.insertFont(PULSR_12_FONT_ID, pulsr12FontFamily);
-#endif  // OMIT_FONTS
   renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
@@ -258,6 +259,7 @@ void setup() {
   }
 
   SETTINGS.loadFromFile();
+  SETTINGS.clampToValidRanges();  // Fallback: clamp stale NVS enum values to known-good defaults
   I18N.loadSettings();
   KOREADER_STORE.loadFromFile();
   UITheme::getInstance().reload();
