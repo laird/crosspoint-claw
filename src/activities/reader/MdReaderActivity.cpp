@@ -22,7 +22,7 @@ constexpr int BULLET_INDENT = 20;
 
 // Cache magic distinct from TxtReader ("TXTI") to avoid collisions
 constexpr uint32_t CACHE_MAGIC = 0x4D445249;  // "MDRI"
-constexpr uint8_t CACHE_VERSION = 1;
+constexpr uint8_t CACHE_VERSION = 2;
 }  // namespace
 
 // ── Markdown parsing helpers ──────────────────────────────────────────────────
@@ -363,10 +363,13 @@ void MdReaderActivity::initializeReader() {
 void MdReaderActivity::buildPageIndex() {
   pageOffsets.clear();
   pageCodeFences.clear();
+  pageSubLineStarts.clear();
   pageOffsets.push_back(0);
   pageCodeFences.push_back(false);
+  pageSubLineStarts.push_back(0);
 
   size_t offset = 0;
+  int subLineStart = 0;
   bool inCodeFence = false;
   const size_t fileSize = txt->getFileSize();
 
@@ -376,13 +379,17 @@ void MdReaderActivity::buildPageIndex() {
   while (offset < fileSize) {
     std::vector<MdLine> tempLines;
     size_t nextOffset = offset;
-    if (!loadPageAtOffset(offset, tempLines, nextOffset, inCodeFence, false)) break;
-    if (nextOffset <= offset) break;
+    int nextSubLineStart = 0;
+    if (!loadPageAtOffset(offset, subLineStart, tempLines, nextOffset, nextSubLineStart, inCodeFence, false)) break;
+    // Guard: must make forward progress
+    if (nextOffset < offset || (nextOffset == offset && nextSubLineStart <= subLineStart)) break;
 
     offset = nextOffset;
-    if (offset < fileSize) {
+    subLineStart = nextSubLineStart;
+    if (offset < fileSize || subLineStart > 0) {
       pageOffsets.push_back(offset);
       pageCodeFences.push_back(inCodeFence);
+      pageSubLineStarts.push_back(static_cast<uint8_t>(std::min(subLineStart, 255)));
     }
     if (pageOffsets.size() % 20 == 0) vTaskDelay(1);
   }
@@ -393,8 +400,10 @@ void MdReaderActivity::buildPageIndex() {
 
 // ── Page loading ──────────────────────────────────────────────────────────────
 
-bool MdReaderActivity::loadPageAtOffset(size_t offset, std::vector<MdLine>& outLines, size_t& nextOffset,
-                                        bool& inCodeFence, bool stripInline) {
+bool MdReaderActivity::loadPageAtOffset(size_t offset, int subLineStart,
+                                        std::vector<MdLine>& outLines, size_t& nextOffset,
+                                        int& nextSubLineStart, bool& inCodeFence,
+                                        bool stripInline) {
   outLines.clear();
   const size_t fileSize = txt->getFileSize();
   if (offset >= fileSize) return false;
@@ -410,6 +419,9 @@ bool MdReaderActivity::loadPageAtOffset(size_t offset, std::vector<MdLine>& outL
     return false;
   }
   buffer[chunkSize] = '\0';
+
+  nextSubLineStart = 0;  // default: next page starts fresh at sub-line 0
+  int remainingSkip = subLineStart;  // sub-lines to skip for first raw line only
 
   size_t pos = 0;
   while (pos < chunkSize && static_cast<int>(outLines.size()) < linesPerPage) {
@@ -467,14 +479,34 @@ bool MdReaderActivity::loadPageAtOffset(size_t offset, std::vector<MdLine>& outL
       }
     }
 
+    const int lineSkip = remainingSkip;
+    remainingSkip = 0;  // skip only applies to first raw line in this call
+
+    const int effectiveCount = static_cast<int>(subLines.size()) - lineSkip;
+    if (effectiveCount <= 0) {
+      // All sub-lines already accounted for by skip — advance past line
+      pos = lineEnd + 1;
+      continue;
+    }
+
     const int spaceLeft = linesPerPage - static_cast<int>(outLines.size());
-    if (outLines.empty() || static_cast<int>(subLines.size()) <= spaceLeft) {
-      // All sub-lines fit (or page is empty — must make progress regardless)
-      const int toAdd = std::min((int)subLines.size(), spaceLeft > 0 ? spaceLeft : linesPerPage);
-      for (int k = 0; k < toAdd; k++) outLines.push_back(subLines[k]);
-      pos = lineEnd + 1;  // Always advance past the full raw line
+    if (outLines.empty() || effectiveCount <= spaceLeft) {
+      // All remaining sub-lines fit (or page is empty — must make progress)
+      const int toAdd = std::min(effectiveCount, spaceLeft > 0 ? spaceLeft : linesPerPage);
+      for (int k = lineSkip; k < lineSkip + toAdd; k++) outLines.push_back(subLines[k]);
+
+      if (lineSkip + toAdd < static_cast<int>(subLines.size())) {
+        // Partial emit: this raw line has more sub-lines than fit on the page.
+        // Return same file offset so next call re-processes this line from sub-line [toAdd].
+        nextOffset = offset + pos;
+        nextSubLineStart = lineSkip + toAdd;
+        free(buffer);
+        return true;
+      }
+
+      pos = lineEnd + 1;  // All sub-lines emitted — advance past raw line
     } else {
-      // Doesn't fit — stop before this raw line and restore fence state
+      // None fit (page already has content) — stop before this raw line
       inCodeFence = fenceBeforeLine;
       break;
     }
@@ -506,9 +538,11 @@ void MdReaderActivity::render(RenderLock&&) {
 
   const size_t offset = pageOffsets[currentPage];
   bool inCodeFence = (currentPage < static_cast<int>(pageCodeFences.size())) ? pageCodeFences[currentPage] : false;
+  const int subLineStart = (currentPage < static_cast<int>(pageSubLineStarts.size())) ? pageSubLineStarts[currentPage] : 0;
   size_t nextOffset;
+  int nextSubLineStart;
   currentPageLines.clear();
-  loadPageAtOffset(offset, currentPageLines, nextOffset, inCodeFence);
+  loadPageAtOffset(offset, subLineStart, currentPageLines, nextOffset, nextSubLineStart, inCodeFence);
 
   renderer.clearScreen();
   renderPage();
@@ -690,7 +724,7 @@ void MdReaderActivity::loadProgress() {
 // ── Page index cache ──────────────────────────────────────────────────────────
 // Format: magic(4) | version(1) | fileSize(4) | viewportWidth(4) | linesPerPage(4)
 //         fontId(4) | screenMargin(4) | paragraphAlignment(1)
-//         numPages(4) | N × (offset(4) + codeFenceState(1))
+//         numPages(4) | N × (offset(4) + codeFenceState(1) + subLineStart(1))
 
 bool MdReaderActivity::loadPageIndexCache() {
   std::string cachePath = txt->getCachePath() + "/md_index.bin";
@@ -759,8 +793,8 @@ bool MdReaderActivity::loadPageIndexCache() {
   uint32_t numPages;
   serialization::readPod(f, numPages);
 
-  // Validate before allocating: each entry is offset(4) + codeFenceState(1)
-  constexpr uint32_t kEntrySize = sizeof(uint32_t) + sizeof(uint8_t);
+  // Validate before allocating: each entry is offset(4) + codeFenceState(1) + subLineStart(1)
+  constexpr uint32_t kEntrySize = sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint8_t);
   const uint32_t remaining = (f.size() > f.position()) ? (f.size() - f.position()) : 0;
   if (numPages == 0 || numPages > remaining / kEntrySize || numPages > 1000000u) {
     f.close();
@@ -769,8 +803,10 @@ bool MdReaderActivity::loadPageIndexCache() {
 
   pageOffsets.clear();
   pageCodeFences.clear();
+  pageSubLineStarts.clear();
   pageOffsets.reserve(numPages);
   pageCodeFences.reserve(numPages);
+  pageSubLineStarts.reserve(numPages);
 
   for (uint32_t i = 0; i < numPages; i++) {
     uint32_t off;
@@ -779,6 +815,9 @@ bool MdReaderActivity::loadPageIndexCache() {
     uint8_t fence;
     serialization::readPod(f, fence);
     pageCodeFences.push_back(fence != 0);
+    uint8_t sls;
+    serialization::readPod(f, sls);
+    pageSubLineStarts.push_back(sls);
   }
 
   f.close();
@@ -809,6 +848,8 @@ void MdReaderActivity::savePageIndexCache() const {
     serialization::writePod(f, static_cast<uint32_t>(pageOffsets[i]));
     const uint8_t fence = (i < pageCodeFences.size() && pageCodeFences[i]) ? 1 : 0;
     serialization::writePod(f, fence);
+    const uint8_t sls = (i < pageSubLineStarts.size()) ? pageSubLineStarts[i] : 0;
+    serialization::writePod(f, sls);
   }
 
   f.close();
