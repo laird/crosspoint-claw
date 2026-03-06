@@ -65,6 +65,11 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       currentTheme = std::make_unique<PulsrTheme>();
       currentMetrics = &PulsrMetrics::values;
       break;
+    default:
+      LOG_ERR("UI", "Unknown theme %d, falling back to Classic", static_cast<int>(type));
+      currentTheme = std::make_unique<BaseTheme>();
+      currentMetrics = &BaseMetrics::values;
+      break;
   }
 }
 
@@ -138,7 +143,19 @@ bool UITheme::isHttpServerActive() { return s_httpServerActive; }
 void UITheme::setWifiAutoConnecting(bool connecting) { s_wifiAutoConnecting = connecting; }
 bool UITheme::isWifiAutoConnecting() { return s_wifiAutoConnecting; }
 
+static bool s_usbConnected = false;
+void UITheme::setUsbConnected(bool connected) { s_usbConnected = connected; }
+bool UITheme::isUsbConnected() { return s_usbConnected; }
+
 static std::vector<std::string> s_receivedFiles;
-void UITheme::addReceivedFile(const std::string& name) { s_receivedFiles.push_back(name); }
+static constexpr size_t MAX_RECEIVED_FILES = 12;
+static constexpr size_t MAX_FILENAME_LEN = 80;
+void UITheme::addReceivedFile(const std::string& name) {
+  if (s_receivedFiles.size() >= MAX_RECEIVED_FILES) {
+    s_receivedFiles.erase(s_receivedFiles.begin());
+  }
+  const std::string truncated = (name.size() <= MAX_FILENAME_LEN) ? name : name.substr(0, MAX_FILENAME_LEN - 3) + "...";
+  s_receivedFiles.push_back(std::move(truncated));
+}
 const std::vector<std::string>& UITheme::getReceivedFiles() { return s_receivedFiles; }
 void UITheme::clearReceivedFiles() { s_receivedFiles.clear(); }

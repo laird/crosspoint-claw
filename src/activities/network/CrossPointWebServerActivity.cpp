@@ -274,6 +274,10 @@ void CrossPointWebServerActivity::stopWebServer() {
     LOG_DBG("WEBACT", "Web server stopped");
   }
   webServer.reset();
+  UITheme::setHttpServerActive(false);
+  UITheme::setNetworkStatus(false, false);
+  UITheme::clearReceivedFiles();
+  uploadedFiles.clear();
 }
 
 void CrossPointWebServerActivity::loop() {

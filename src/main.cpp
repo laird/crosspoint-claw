@@ -368,6 +368,7 @@ void loop() {
   {
     static bool lastUsbState = gpio.isUsbConnected();
     const bool usbNow = gpio.isUsbConnected();
+    UITheme::setUsbConnected(usbNow);
     if (usbNow != lastUsbState) {
       lastUsbState = usbNow;
       activityManager.requestUpdate();

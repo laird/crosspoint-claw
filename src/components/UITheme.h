@@ -34,6 +34,8 @@ class UITheme {
   static bool isHttpServerActive();
   static void setWifiAutoConnecting(bool connecting);
   static bool isWifiAutoConnecting();
+  static void setUsbConnected(bool connected);
+  static bool isUsbConnected();
   static void addReceivedFile(const std::string& name);
   static const std::vector<std::string>& getReceivedFiles();
   static void clearReceivedFiles();

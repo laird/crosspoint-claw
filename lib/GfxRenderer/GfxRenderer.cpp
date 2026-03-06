@@ -1017,7 +1017,10 @@ int GfxRenderer::getTextHeight(const int fontId) const {
 
 int GfxRenderer::getCapHeight(const int fontId) const {
   const auto fontIt = fontMap.find(fontId);
-  if (fontIt == fontMap.end()) return 0;
+  if (fontIt == fontMap.end()) {
+    LOG_ERR("GFX", "Font %d not found", fontId);
+    return 0;
+  }
   // Use glyph 'H' (U+0048) top value as a reliable cap-height proxy.
   const EpdGlyph* g = fontIt->second.getGlyph(0x48, EpdFontFamily::REGULAR);
   return (g != nullptr) ? g->top : fontIt->second.getData(EpdFontFamily::REGULAR)->ascender;

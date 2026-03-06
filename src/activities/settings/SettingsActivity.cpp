@@ -236,8 +236,9 @@ void SettingsActivity::render(RenderLock&&) {
       },
       true);
 
-  // Draw help text
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+  // Draw help text — hide the Toggle hint when no setting is focused (tab bar state)
+  const char* toggleHint = (selectedSettingIndex > 0) ? tr(STR_TOGGLE) : "";
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), toggleHint, tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   // Always use standard refresh for settings screen

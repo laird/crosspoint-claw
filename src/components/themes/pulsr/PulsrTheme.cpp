@@ -176,7 +176,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       const int pillW = LEFT_W - SEG_MARGIN * 2;
       const int pillH = 18;
       const int pillX = SEG_MARGIN;
-      const bool usbConnected = (digitalRead(20) == HIGH);
+      const bool usbConnected = UITheme::isUsbConnected();
       if (usbConnected) {
         const int seg2Bottom = zoneTop + segH * 3;
         const int chrgY = seg2Bottom - SEG_MARGIN - pillH;
@@ -316,8 +316,16 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const st
       abbr[2] = 'R';
       abbr[3] = 'L';
     }
-    // If abbr is empty (label starts with non-ASCII), skip tab label rendering.
-    // TabInfo has no shortLabel field; callers must provide ASCII-prefixed labels.
+    // If abbr is empty (label starts with non-ASCII), fall back to shortLabel if provided.
+    if (abbr[0] == '\0' && tabs[i].shortLabel != nullptr) {
+      const char* sl = tabs[i].shortLabel;
+      for (int c = 0; sl[c] != '\0' && abbrLen < 4; c++) {
+        unsigned char ch = static_cast<unsigned char>(sl[c]);
+        if (ch > 0x7F) break;
+        abbr[abbrLen++] = (ch >= 'a' && ch <= 'z') ? ch - 32 : ch;
+      }
+    }
+    // If still empty after shortLabel fallback, skip rendering this tab label.
     if (abbr[0] == '\0') {
       continue;
     }
@@ -377,7 +385,7 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
                           const std::function<std::string(int)>& rowValue, bool highlightValue) const {
   const Rect cr = contentRect(rect);
   const int rowH = (rowSubtitle != nullptr) ? Lm::values.listWithSubtitleRowHeight : Lm::values.listRowHeight;
-  const int pageItems = cr.height / rowH;
+  const int pageItems = std::max(1, cr.height / rowH);
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
 
   // ── Scroll indicator (arrows at right edge of content) ────────────────────

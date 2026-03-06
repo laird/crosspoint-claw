@@ -21,6 +21,7 @@ struct Rect {
 struct TabInfo {
   const char* label;
   bool selected;
+  const char* shortLabel = nullptr;  // Optional 1–4 char ASCII override for themes with narrow tab bars
 };
 
 struct ThemeMetrics {
