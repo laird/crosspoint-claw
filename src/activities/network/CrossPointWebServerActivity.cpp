@@ -368,6 +368,9 @@ void CrossPointWebServerActivity::render(RenderLock&&) {
 }
 
 void CrossPointWebServerActivity::renderServerRunning() const {
+  // Keep UITheme network state in sync so PULSR pills reflect activity
+  UITheme::setHttpServerActive(true);
+  UITheme::setNetworkStatus(true, false);
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
 

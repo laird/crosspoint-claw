@@ -29,7 +29,10 @@ class UITheme {
   static void setNetworkStatus(bool connected, bool transferring);
   static bool isNetworkConnected();
   static bool isNetworkTransferring();
-  static bool isHttpServerActive() { return false; }  // stub: extended by web server PR
+  static void setHttpServerActive(bool active);
+  static bool isHttpServerActive();
+  static void setWifiAutoConnecting(bool connecting);
+  static bool isWifiAutoConnecting();
 
  private:
   const ThemeMetrics* currentMetrics;

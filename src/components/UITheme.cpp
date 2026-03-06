@@ -125,3 +125,11 @@ int UITheme::getProgressBarHeight() {
       SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
   return (showProgressBar ? (((SETTINGS.statusBarProgressBarThickness + 1) * 2) + metrics.progressBarMarginTop) : 0);
 }
+
+static bool s_httpServerActive = false;
+static bool s_wifiAutoConnecting = false;
+
+void UITheme::setHttpServerActive(bool active) { s_httpServerActive = active; }
+bool UITheme::isHttpServerActive() { return s_httpServerActive; }
+void UITheme::setWifiAutoConnecting(bool connecting) { s_wifiAutoConnecting = connecting; }
+bool UITheme::isWifiAutoConnecting() { return s_wifiAutoConnecting; }

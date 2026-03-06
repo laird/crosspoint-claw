@@ -96,20 +96,50 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       renderer.drawLine(LINE_INSET, lineY, LEFT_W - LINE_INSET, lineY, /*black=*/false);
     }
 
-    // Seg 0: HTTP status pill when network is connected
-    if (UITheme::isNetworkConnected()) {
-      const int indX = SEG_MARGIN;
-      const int indY = zoneTop + SEG_MARGIN;
-      const int indW = LEFT_W - SEG_MARGIN * 2;
-      const int indH = segH - SEG_MARGIN * 2;
-      const Color httpColor = UITheme::isNetworkTransferring()
-                                  ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-                                  : Color::LightGray;
-      renderer.fillRoundedRect(indX, indY, indW, indH, PILL_R, httpColor);
-      const char* lbl = "HTTP";
-      const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
-      const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-      renderer.drawText(PULSR_10_FONT_ID, indX + (indW - lw) / 2, indY + (indH - lh) / 2, lbl, /*black=*/true);
+    // Seg 0: Power segment — PWR pill always; WIFI pill while connecting; HTTP when server active.
+    {
+      const int PILL_GAP = 3;
+      const int pillW = LEFT_W - SEG_MARGIN * 2;
+      const int pillH = 18;
+      const int pillX = SEG_MARGIN;
+      int pillY = zoneTop + SEG_MARGIN;
+
+      // PWR pill — always shown
+      renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, Color::LightGray);
+      {
+        const char* lbl = "PWR";
+        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+      }
+      pillY += pillH + PILL_GAP;
+
+      // WIFI pill — pulsing while auto-connecting on boot
+      if (UITheme::isWifiAutoConnecting()) {
+        const Color wifiColor = (millis() / 500) % 2 == 0 ? Color::White : Color::DarkGray;
+        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, wifiColor);
+        const char* lbl = "WIFI";
+        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+      }
+      pillY += pillH + PILL_GAP;
+
+      // HTTP pill — when web server is active (pulsing during transfer)
+      if (UITheme::isHttpServerActive()) {
+        const Color httpColor = UITheme::isNetworkTransferring()
+                                    ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
+                                    : Color::LightGray;
+        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
+        const char* lbl = "HTTP";
+        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+      }
+      pillY += pillH + PILL_GAP;
+
+      // DZON pill — implemented in the Danger Zone PR
+      // FEED pill — implemented in the RSS Feed PR
     }
     // Seg 1 & 2: Up/Down arrows + CHRG pill at bottom of Seg 2
     {
