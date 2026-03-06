@@ -9,7 +9,6 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <SPI.h>
-#include <Update.h>
 #include <builtinFonts/all.h>
 
 #include <cstring>
@@ -21,24 +20,11 @@
 #include "RecentBooksStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
-#include "activities/boot_sleep/BootActivity.h"
-#include "activities/boot_sleep/SleepActivity.h"
-#include "activities/browser/OpdsBookBrowserActivity.h"
-#include "activities/home/HomeActivity.h"
-#include "activities/home/MyLibraryActivity.h"
-#include "activities/home/RecentBooksActivity.h"
-#include "activities/network/CrossPointWebServerActivity.h"
-#include "activities/network/NetworkModeSelectionActivity.h"
-#include "activities/network/WifiSelectionActivity.h"
-#include "activities/util/KeyboardEntryActivity.h"
-#include "activities/reader/ReaderActivity.h"
-#include "activities/settings/SettingsActivity.h"
-#include "activities/util/FullScreenMessageActivity.h"
 #include "components/UITheme.h"
+#include "components/themes/pulsr/PulsrTheme.h"
 #include "fontIds.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
-#include "util/ScreenCapture.h"
 
 HalDisplay display;
 HalGPIO gpio;
@@ -48,6 +34,10 @@ ActivityManager activityManager(renderer, mappedInputManager);
 FontDecompressor fontDecompressor;
 
 // Fonts
+EpdFont pulsr10Font(&antonio_10_regular);
+EpdFontFamily pulsr10FontFamily(&pulsr10Font);
+EpdFont pulsr12Font(&antonio_12_regular);
+EpdFontFamily pulsr12FontFamily(&pulsr12Font);
 EpdFont bookerly14RegularFont(&bookerly_14_regular);
 EpdFont bookerly14BoldFont(&bookerly_14_bold);
 EpdFont bookerly14ItalicFont(&bookerly_14_italic);
@@ -135,12 +125,6 @@ EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont);
 EpdFont ui12RegularFont(&ubuntu_12_regular);
 EpdFont ui12BoldFont(&ubuntu_12_bold);
 EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
-
-EpdFont pulsr10Font(&antonio_10_regular);
-EpdFontFamily pulsr10FontFamily(&pulsr10Font);
-
-EpdFont pulsr12Font(&antonio_12_regular);
-EpdFontFamily pulsr12FontFamily(&pulsr12Font);
 
 // measurement of power button press duration calibration value
 unsigned long t1 = 0;
@@ -238,12 +222,12 @@ void setupDisplayAndFonts() {
   renderer.insertFont(OPENDYSLEXIC_10_FONT_ID, opendyslexic10FontFamily);
   renderer.insertFont(OPENDYSLEXIC_12_FONT_ID, opendyslexic12FontFamily);
   renderer.insertFont(OPENDYSLEXIC_14_FONT_ID, opendyslexic14FontFamily);
-#endif  // OMIT_FONTS
-  renderer.insertFont(PULSR_10_FONT_ID, ui10FontFamily);
-  renderer.insertFont(PULSR_12_FONT_ID, ui12FontFamily);
-  renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
   renderer.insertFont(PULSR_10_FONT_ID, pulsr10FontFamily);
   renderer.insertFont(PULSR_12_FONT_ID, pulsr12FontFamily);
+#endif  // OMIT_FONTS
+  renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
+  renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
+  renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
   LOG_DBG("MAIN", "Fonts setup");
 }
 
@@ -303,99 +287,6 @@ void setup() {
 
   activityManager.goToBoot();
 
-  // Check for SD card firmware update
-  if (Storage.exists("/firmware.bin")) {
-    LOG_INF("MAIN", "SD card firmware update found, applying...");
-    const auto pageWidth = renderer.getScreenWidth();
-    const auto pageHeight = renderer.getScreenHeight();
-    const int barX = 40;
-    const int barW = pageWidth - 80;
-    const int barH = 12;
-    const int barY = pageHeight / 2 + 35;
-
-    auto drawUpdateScreen = [&](int pct) {
-      renderer.clearScreen();
-      renderer.drawCenteredText(PULSR_10_FONT_ID, pageHeight / 2 - 20, "Updating firmware...", true, EpdFontFamily::BOLD);
-      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 10, "Do not power off");
-      renderer.drawRect(barX, barY, barW, barH, true);
-      if (pct > 0) {
-        const int fillW = (barW * pct) / 100;
-        if (fillW > 2) renderer.fillRect(barX + 1, barY + 1, fillW - 2, barH - 2, true);
-      }
-      char pctStr[8];
-      snprintf(pctStr, sizeof(pctStr), "%d%%", pct);
-      renderer.drawCenteredText(SMALL_FONT_ID, barY + barH + 8, pctStr);
-      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 30, CROSSPOINT_VERSION);
-      renderer.displayBuffer();
-    };
-
-    auto logOtaError = [](const char* msg, size_t fileSize = 0, size_t written = 0) -> bool {
-      FsFile logFile;
-      if (!Storage.openFileForWrite("MAIN", "/ota_error.log", logFile)) {
-        LOG_ERR("MAIN", "OTA: could not open /ota_error.log for writing");
-        return false;
-      }
-      logFile.print("OTA error: ");
-      logFile.println(msg);
-      if (fileSize > 0) {
-        char buf[64];
-        snprintf(buf, sizeof(buf), "File size: %u, Written: %u", (unsigned)fileSize, (unsigned)written);
-        logFile.println(buf);
-      }
-      logFile.print("Free heap: ");
-      logFile.println(ESP.getFreeHeap());
-      logFile.print("Version: ");
-      logFile.println(CROSSPOINT_VERSION);
-      logFile.close();
-      return true;
-    };
-
-    auto showError = [&](const char* msg, size_t fileSize = 0, size_t written = 0) {
-      const bool logged = logOtaError(msg, fileSize, written);
-      renderer.clearScreen();
-      renderer.drawCenteredText(PULSR_10_FONT_ID, pageHeight / 2 - 30, "Firmware update failed", true, EpdFontFamily::BOLD);
-      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2, msg);
-      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 20, "firmware.bin NOT deleted");
-      renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 38,
-                                logged ? "Error saved to /ota_error.log" : "Could not write /ota_error.log");
-      renderer.displayBuffer(HalDisplay::FULL_REFRESH);
-      delay(15000);
-    };
-
-    drawUpdateScreen(0);
-
-    FsFile firmwareFile = Storage.open("/firmware.bin");
-    if (firmwareFile) {
-      const size_t fileSize = firmwareFile.size();
-      LOG_INF("MAIN", "Firmware file size: %u bytes", fileSize);
-      if (Update.begin(fileSize, U_FLASH)) {
-        int lastPct = 0;
-        Update.onProgress([&](size_t progress, size_t total) {
-          if (total == 0) return;
-          const int pct = static_cast<int>((progress * 100) / total);
-          if (pct >= lastPct + 5) {
-            lastPct = pct;
-            drawUpdateScreen(pct);
-          }
-        });
-        const size_t written = Update.writeStream(firmwareFile);
-        if (written == fileSize && Update.end()) {
-          firmwareFile.close();
-          Storage.remove("/firmware.bin");
-          LOG_INF("MAIN", "Firmware update complete, restarting...");
-          ESP.restart();
-        } else {
-          LOG_ERR("MAIN", "Firmware write failed: written=%u/%u, error: %s", written, fileSize, Update.errorString());
-        }
-      } else {
-        LOG_ERR("MAIN", "Update.begin() failed: %s", Update.errorString());
-      }
-      firmwareFile.close();
-    } else {
-      LOG_ERR("MAIN", "Failed to open /firmware.bin");
-    }
-  }
-
   APP_STATE.loadFromFile();
   RECENT_BOOKS.loadFromFile();
 
@@ -415,54 +306,6 @@ void setup() {
 
   // Ensure we're not still holding the power button before leaving setup
   waitForPowerRelease();
-}
-
-void runScreenshotTour() {
-  auto captureStep = [](const char* name) {
-    for (int i = 0; i < 6; i++) {
-      if (currentActivity) currentActivity->loop();
-      delay(100);
-    }
-    ScreenCapture::save(renderer, name);
-  };
-
-  GUI.drawPopup(renderer, "Taking screenshots...");
-  delay(300);
-
-  onGoHome();
-  captureStep("home");
-
-  exitActivity();
-  enterNewActivity(new SettingsActivity(renderer, mappedInputManager, onGoHome));
-  captureStep("settings");
-
-  exitActivity();
-  enterNewActivity(new MyLibraryActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
-  captureStep("browse");
-
-  exitActivity();
-  enterNewActivity(new RecentBooksActivity(renderer, mappedInputManager, onGoHome, onGoToReader));
-  captureStep("recents");
-
-  exitActivity();
-  enterNewActivity(new NetworkModeSelectionActivity(renderer, mappedInputManager,
-                                                    [](NetworkMode) {}, [] {}));
-  captureStep("network_mode");
-
-  exitActivity();
-  // false = no auto-connect, so we stay in SCANNING state for the capture
-  enterNewActivity(new WifiSelectionActivity(renderer, mappedInputManager, [](bool) {}, false));
-  captureStep("wifi_scan");
-
-  exitActivity();
-  enterNewActivity(new KeyboardEntryActivity(renderer, mappedInputManager, "WIFI PASSWORD", "", 64,
-                                             true, nullptr, nullptr));
-  captureStep("keyboard");
-
-  onGoHome();
-  delay(300);
-  GUI.drawPopup(renderer, "Done! Saved to /screencap/");
-  delay(2000);
 }
 
 void loop() {
@@ -498,7 +341,7 @@ void loop() {
 
   // Check for any user activity (button press or release) or active background work
   static unsigned long lastActivityTime = millis();
-  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || activityManager.preventAutoSleep() || gpio.isUsbConnected()) {
+  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || activityManager.preventAutoSleep()) {
     lastActivityTime = millis();         // Reset inactivity timer
     powerManager.setPowerSaving(false);  // Restore normal CPU frequency on user activity
   }
@@ -530,27 +373,6 @@ void loop() {
     if (gpio.isPressed(HalGPIO::BTN_DOWN)) {
       return;
     }
-  // Screenshot tour combo: Power + Confirm held 1.5 s
-  {
-    static unsigned long screenshotHoldStart = 0;
-    static bool screenshotTriggered = false;
-    const bool powerHeld   = gpio.isPressed(HalGPIO::BTN_POWER);
-    const bool confirmHeld = gpio.isPressed(HalGPIO::BTN_CONFIRM);
-    if (powerHeld && confirmHeld && !screenshotTriggered) {
-      if (screenshotHoldStart == 0) screenshotHoldStart = millis();
-      else if (millis() - screenshotHoldStart >= 1500) {
-        screenshotTriggered = true;
-        runScreenshotTour();
-      }
-    } else {
-      if (!powerHeld || !confirmHeld) screenshotHoldStart = 0;
-      if (!powerHeld) screenshotTriggered = false;
-    }
-  }
-
-  // Power-only hold triggers deep sleep; skip if Confirm is also held (screenshot combo)
-  if (gpio.isPressed(HalGPIO::BTN_POWER) && !gpio.isPressed(HalGPIO::BTN_CONFIRM) &&
-      gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
     enterDeepSleep();
     // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
     return;

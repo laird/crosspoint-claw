@@ -44,7 +44,7 @@ constexpr ThemeMetrics values = {
   .buttonHintsHeight         = TOP_BAR_H,
   .sideButtonHintsWidth      = 0,
   .progressBarHeight         = 14,
-  .bookProgressBarHeight     = 5,
+
   .keyboardKeyWidth          = 24,  // narrower keys center keyboard at x=100, past 88px left bar
   .keyboardKeyHeight         = 42,
   .keyboardKeySpacing        = 4,

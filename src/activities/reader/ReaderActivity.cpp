@@ -2,10 +2,8 @@
 
 #include <FsHelpers.h>
 #include <HalStorage.h>
-#include <I18n.h>
 
 #include "CrossPointSettings.h"
-#include "components/UITheme.h"
 #include "Epub.h"
 #include "EpubReaderActivity.h"
 #include "Txt.h"
@@ -117,13 +115,6 @@ void ReaderActivity::onEnter() {
   if (isBmpFile(initialBookPath)) {
     onGoToBmpViewer(initialBookPath);
   } else if (isXtcFile(initialBookPath)) {
-
-  // Show a loading popup immediately so the user knows the device is working.
-  // The load calls below block for several seconds on large books.
-  GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
-  renderer.displayBuffer();
-
-  if (isXtcFile(initialBookPath)) {
     auto xtc = loadXtc(initialBookPath);
     if (!xtc) {
       onGoBack();

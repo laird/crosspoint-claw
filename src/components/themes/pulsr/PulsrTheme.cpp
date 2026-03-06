@@ -82,131 +82,41 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
   //  The left bar is divided into 4 equal segments that visually line up with the
   //  three physical buttons on the right edge (Power, Up, Down) plus a battery segment.
   //
-  //  Seg 0 (top)   → Power button  : PWR pill + HTTP pill (if server active) + FEED pill (if feed active)
-  //  Seg 1         → Up button     : ↑ arrow label
-  //  Seg 2         → Down button   : ↓ arrow label
-  //  Seg 3 (bot)   → Battery       : vertical fill bar + percentage text
+  //  Left bar: 4 segments (Power/HTTP, Up, Down, Battery)
   {
     constexpr int NUM_SEGS   = 4;
     constexpr int LINE_INSET = 8;
-    constexpr int SEG_MARGIN = 6;   // inset for pills/labels within each segment
-    constexpr int PILL_R     = 5;   // pill corner radius
-    constexpr int PILL_GAP   = 3;   // gap between stacked pills
+    constexpr int SEG_MARGIN = 6;
+    constexpr int PILL_R     = 5;
     const int zoneTop    = NAV_GAP + 4;
     const int zoneBottom = H - NAV_GAP - 4;
-    const int zoneH      = zoneBottom - zoneTop;
-    const int segH       = zoneH / NUM_SEGS;
-    const int pillW      = LEFT_W - SEG_MARGIN - (SEG_MARGIN + PILL_LEFT);
-    const int pillX      = SEG_MARGIN + PILL_LEFT;
-    // Pill height: divide segment evenly among up to MAX_PILLS pills
-    constexpr int MAX_PILLS  = 4;
-    const int pillH = (segH - SEG_MARGIN * 2 - PILL_GAP * (MAX_PILLS - 1)) / MAX_PILLS;
+    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
 
-    // ── Separator lines between segments ──────────────────────────────────────
+    // Separator lines between segments
     for (int i = 1; i < NUM_SEGS; i++) {
       const int lineY = zoneTop + segH * i;
       renderer.drawLine(LINE_INSET, lineY, LEFT_W - LINE_INSET, lineY, /*black=*/false);
     }
 
-  // ── 5. Network connectivity indicator in top segment of left bar ─────────────
-  // Grey = connected (idle), white-blink = active transfer. Label: "HTTP"
-  if (UITheme::isNetworkConnected()) {
-    constexpr int IND_MARGIN = 8;
-    constexpr int NUM_SEGS   = 4;
-    const int zoneTop    = NAV_GAP + 4;
-    const int zoneBottom = H - NAV_GAP - 4;
-    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
-    const int indX = IND_MARGIN;
-    const int indY = zoneTop + IND_MARGIN;
-    const int indW = LEFT_W - IND_MARGIN * 2;
-    const int indH = segH - IND_MARGIN * 2;
-    constexpr int IND_R = 6;
-
-    const Color indColor = UITheme::isNetworkTransferring()
-                               ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-                               : Color::LightGray;
-    renderer.fillRoundedRect(indX, indY, indW, indH, IND_R, indColor);
-
-    // Centered "HTTP" label — black text on grey pill
-    const char* httpLabel = "HTTP";
-    const int lblW = renderer.getTextWidth(PULSR_10_FONT_ID, httpLabel);
-    const int lblH = renderer.getTextHeight(PULSR_10_FONT_ID);
-    renderer.drawText(PULSR_10_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, httpLabel, /*black=*/true);
-  }
-
-  // ── 5b. RSS sync indicator in second segment of left bar ───────────────────
-  // Lit white/pulsing while a feed sync is running; dim outline when idle. Label: "FEED"
-  {
-    constexpr int IND_MARGIN = 8;
-    constexpr int NUM_SEGS   = 4;
-    const int zoneTop    = NAV_GAP + 4;
-    const int zoneBottom = H - NAV_GAP - 4;
-    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
-    const int indX = IND_MARGIN;
-    const int indY = zoneTop + segH + IND_MARGIN;
-    const int indW = LEFT_W - IND_MARGIN * 2;
-    const int indH = segH - IND_MARGIN * 2;
-    constexpr int IND_R = 6;
-
-      // HTTP pill — only when web server is active
-      if (UITheme::isHttpServerActive()) {
-        const Color httpColor = UITheme::isNetworkTransferring()
-            ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-            : Color::LightGray;
-        renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
-        const char* lbl = "HTTP";
-        const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
-        const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
-      }
-      pillY += pillH + PILL_GAP;
-
-      // FEED pill — colour + label reflect sync state; falls back to DZ pill when idle
-      {
-        const auto feedState = RssFeedSync::getState();
-        Color feedColor = Color::Black;  // invisible (IDLE/DONE)
-        bool showPill = false;
-        const char* pillLabel = nullptr;
-        switch (feedState) {
-          case RssFeedSync::State::FETCHING:
-            feedColor = Color::LightGray; showPill = true; break;
-          case RssFeedSync::State::PARSING:
-            feedColor = ((millis() / 500) % 2 == 0 ? Color::LightGray : Color::DarkGray);
-            showPill = true; break;
-          case RssFeedSync::State::DOWNLOADING:
-            feedColor = ((millis() / 400) % 2 == 0 ? Color::White : Color::LightGray);
-            showPill = true; break;
-          case RssFeedSync::State::ERROR:
-            feedColor = Color::White; showPill = true; break;
-          case RssFeedSync::State::DONE:
-            feedColor = Color::LightGray; showPill = true; break;
-          default: break;
-        }
-        if (showPill) {
-          pillLabel = RssFeedSync::getStatusLabel();
-        } else if (SETTINGS.dangerZoneEnabled) {
-          // Show "DZ" warning pill when Danger Zone is active and feed is idle
-          showPill = true;
-          feedColor = ((millis() / 800) % 2 == 0 ? Color::White : Color::DarkGray);
-          pillLabel = "DZON";
-        }
-        if (showPill && pillLabel) {
-          renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
-          const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, pillLabel);
-          const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-          renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, pillLabel, /*black=*/true);
-        }
-      }
+    // Seg 0: HTTP status pill when network is connected
+    if (UITheme::isNetworkConnected()) {
+      const int indX = SEG_MARGIN;
+      const int indY = zoneTop + SEG_MARGIN;
+      const int indW = LEFT_W - SEG_MARGIN * 2;
+      const int indH = segH - SEG_MARGIN * 2;
+      const Color httpColor = UITheme::isNetworkTransferring()
+          ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
+          : Color::LightGray;
+      renderer.fillRoundedRect(indX, indY, indW, indH, PILL_R, httpColor);
+      const char* lbl = "HTTP";
+      const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
+      const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
+      renderer.drawText(PULSR_10_FONT_ID, indX + (indW - lw) / 2, indY + (indH - lh) / 2, lbl, /*black=*/true);
     }
-
-    // Centered "FEED" label — white text (visible on both dark bg and lit pill)
-    const char* feedLabel = "FEED";
-    const int lblW = renderer.getTextWidth(PULSR_10_FONT_ID, feedLabel);
-    const int lblH = renderer.getTextHeight(PULSR_10_FONT_ID);
-    renderer.drawText(PULSR_10_FONT_ID, indX + (indW - lblW) / 2, indY + (indH - lblH) / 2, feedLabel, /*black=*/false);
+    // Seg 1: reserved for sync status (RSS Feed PR extends this)
   }
 
-  // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
+    // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
   {
     const char* raw = (title != nullptr) ? title : "HOME";
     std::string upper(raw);
@@ -676,7 +586,7 @@ void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t 
 void PulsrTheme::drawReadingProgressBar(const GfxRenderer& renderer,
                                          const size_t bookProgress) const {
   const int contentW = renderer.getScreenWidth() - LEFT_W;
-  const int barH     = Lm::values.bookProgressBarHeight;
+  const int barH     = Lm::values.progressBarHeight;
   const int barY     = TOP_H;  // immediately below the top bar
   const int fillW    = contentW * static_cast<int>(bookProgress) / 100;
   if (fillW > 0) {
