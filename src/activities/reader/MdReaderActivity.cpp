@@ -6,11 +6,13 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
+#include <algorithm>
+
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
-#include "activities/ActivityResult.h"
 #include "RecentBooksStore.h"
+#include "activities/ActivityResult.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -40,10 +42,7 @@ static bool isHorizontalRule(const std::string& trimmed) {
   if (trimmed.size() < 3) return false;
   const char c = trimmed[0];
   if (c != '-' && c != '*' && c != '_') return false;
-  for (char ch : trimmed) {
-    if (ch != c) return false;
-  }
-  return true;
+  return std::all_of(trimmed.begin(), trimmed.end(), [c](char ch) { return ch == c; });
 }
 
 // Strip inline Markdown markers, showing link text only (not the URL).
@@ -308,8 +307,8 @@ void MdReaderActivity::loop() {
   // Confirm button opens the reader menu (orientation, etc.)
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     startActivityForResult(
-        std::make_unique<EpubReaderMenuActivity>(renderer, mappedInput, txt ? txt->getPath() : "",
-                                                 currentPage + 1, totalPages, 0, SETTINGS.orientation, false),
+        std::make_unique<EpubReaderMenuActivity>(renderer, mappedInput, txt ? txt->getPath() : "", currentPage + 1,
+                                                 totalPages, 0, SETTINGS.orientation, false),
         [this](const ActivityResult& result) {
           const auto& menu = std::get<MenuResult>(result.data);
           applyOrientation(menu.orientation);
@@ -329,7 +328,6 @@ void MdReaderActivity::loop() {
 }
 
 // ── Initialization ────────────────────────────────────────────────────────────
-
 
 void MdReaderActivity::applyOrientation(const uint8_t orientation) {
   if (SETTINGS.orientation == orientation) return;
@@ -447,9 +445,8 @@ void MdReaderActivity::buildPageIndex() {
 
 // ── Page loading ──────────────────────────────────────────────────────────────
 
-bool MdReaderActivity::loadPageAtOffset(size_t offset, int subLineStart,
-                                        std::vector<MdLine>& outLines, size_t& nextOffset,
-                                        int& nextSubLineStart, bool& inCodeFence,
+bool MdReaderActivity::loadPageAtOffset(size_t offset, int subLineStart, std::vector<MdLine>& outLines,
+                                        size_t& nextOffset, int& nextSubLineStart, bool& inCodeFence,
                                         bool stripInline) {
   outLines.clear();
   const size_t fileSize = txt->getFileSize();
@@ -467,7 +464,7 @@ bool MdReaderActivity::loadPageAtOffset(size_t offset, int subLineStart,
   }
   buffer[chunkSize] = '\0';
 
-  nextSubLineStart = 0;  // default: next page starts fresh at sub-line 0
+  nextSubLineStart = 0;              // default: next page starts fresh at sub-line 0
   int remainingSkip = subLineStart;  // sub-lines to skip for first raw line only
 
   size_t pos = 0;
@@ -585,7 +582,8 @@ void MdReaderActivity::render(RenderLock&&) {
 
   const size_t offset = pageOffsets[currentPage];
   bool inCodeFence = (currentPage < static_cast<int>(pageCodeFences.size())) ? pageCodeFences[currentPage] : false;
-  const int subLineStart = (currentPage < static_cast<int>(pageSubLineStarts.size())) ? pageSubLineStarts[currentPage] : 0;
+  const int subLineStart =
+      (currentPage < static_cast<int>(pageSubLineStarts.size())) ? pageSubLineStarts[currentPage] : 0;
   size_t nextOffset;
   int nextSubLineStart;
   currentPageLines.clear();

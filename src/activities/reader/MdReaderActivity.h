@@ -46,8 +46,7 @@ class MdReaderActivity final : public ActivityWithSubactivity {
 
   void initializeReader();
   bool loadPageAtOffset(size_t offset, int subLineStart, std::vector<MdLine>& outLines, size_t& nextOffset,
-                         int& nextSubLineStart, bool& inCodeFence,
-                        bool stripInline = true);
+                        int& nextSubLineStart, bool& inCodeFence, bool stripInline = true);
   void buildPageIndex();
   bool loadPageIndexCache();
   void savePageIndexCache() const;
