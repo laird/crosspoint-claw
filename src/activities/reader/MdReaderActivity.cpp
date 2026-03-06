@@ -338,7 +338,7 @@ void MdReaderActivity::initializeReader() {
                                  SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::ONLY_BOOK_PROGRESS_BAR ||
                                  SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
     orientedMarginBottom += statusBarMargin - cachedScreenMargin +
-                            (showProgressBar ? (metrics.bookProgressBarHeight + progressBarMarginTop) : 0);
+                            (showProgressBar ? (metrics.progressBarHeight + progressBarMarginTop) : 0);
   }
 
   viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
@@ -491,7 +491,7 @@ bool MdReaderActivity::loadPageAtOffset(size_t offset, std::vector<MdLine>& outL
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
-void MdReaderActivity::render(Activity::RenderLock&&) {
+void MdReaderActivity::render(RenderLock&&) {
   if (!txt) return;
   if (!initialized) initializeReader();
 
