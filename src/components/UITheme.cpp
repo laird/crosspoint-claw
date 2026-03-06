@@ -133,3 +133,8 @@ void UITheme::setHttpServerActive(bool active) { s_httpServerActive = active; }
 bool UITheme::isHttpServerActive() { return s_httpServerActive; }
 void UITheme::setWifiAutoConnecting(bool connecting) { s_wifiAutoConnecting = connecting; }
 bool UITheme::isWifiAutoConnecting() { return s_wifiAutoConnecting; }
+
+static std::vector<std::string> s_receivedFiles;
+void UITheme::addReceivedFile(const std::string& name) { s_receivedFiles.push_back(name); }
+const std::vector<std::string>& UITheme::getReceivedFiles() { return s_receivedFiles; }
+void UITheme::clearReceivedFiles() { s_receivedFiles.clear(); }

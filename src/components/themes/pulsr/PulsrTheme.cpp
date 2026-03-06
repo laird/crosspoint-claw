@@ -114,9 +114,9 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       }
       pillY += pillH + PILL_GAP;
 
-      // WIFI pill — pulsing while auto-connecting on boot
+      // WIFI pill — static when auto-connecting on boot
       if (UITheme::isWifiAutoConnecting()) {
-        const Color wifiColor = (millis() / 500) % 2 == 0 ? Color::White : Color::DarkGray;
+        const Color wifiColor = Color::LightGray;
         renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, wifiColor);
         const char* lbl = "WIFI";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
@@ -125,11 +125,9 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       }
       pillY += pillH + PILL_GAP;
 
-      // HTTP pill — when web server is active (pulsing during transfer)
+      // HTTP pill — White during active transfer, LightGray when idle
       if (UITheme::isHttpServerActive()) {
-        const Color httpColor = UITheme::isNetworkTransferring()
-                                    ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-                                    : Color::LightGray;
+        const Color httpColor = UITheme::isNetworkTransferring() ? Color::White : Color::LightGray;
         renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
         const char* lbl = "HTTP";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);

@@ -250,6 +250,8 @@ void CrossPointWebServerActivity::startWebServer() {
     state = WebServerActivityState::SERVER_RUNNING;
     UITheme::setHttpServerActive(true);
     UITheme::setNetworkStatus(true, false);
+    UITheme::clearReceivedFiles();
+    uploadedFiles.clear();
     LOG_DBG("WEBACT", "Web server started successfully");
 
     // Force an immediate render since we're transitioning from a subactivity
@@ -277,6 +279,19 @@ void CrossPointWebServerActivity::stopWebServer() {
 void CrossPointWebServerActivity::loop() {
   // Handle different states
   if (state == WebServerActivityState::SERVER_RUNNING) {
+    // Track completed file uploads and update network transfer state for PULSR pill
+    if (webServer) {
+      const auto uploadStatus = webServer->getWsUploadStatus();
+      if (uploadStatus.lastCompleteAt > lastKnownCompleteAt) {
+        if (!uploadStatus.lastCompleteName.empty()) {
+          uploadedFiles.push_back(uploadStatus.lastCompleteName);
+          UITheme::addReceivedFile(uploadStatus.lastCompleteName);
+        }
+        lastKnownCompleteAt = uploadStatus.lastCompleteAt;
+        requestUpdate();
+      }
+      UITheme::setNetworkStatus(true, uploadStatus.inProgress);
+    }
     // Handle DNS requests for captive portal (AP mode only)
     if (isApMode && dnsServer) {
       dnsServer->processNextRequest();
@@ -443,9 +458,23 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     const Rect qrBoundsUrl(contentLeft + (contentW - QR_CODE_WIDTH) / 2, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBoundsUrl, hostnameUrl);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
-    drawCentered(UI_10_FONT_ID, startY, hostnameUrl.c_str());
-    startY += height10;
-    drawCentered(SMALL_FONT_ID, startY, ipUrl.c_str());
+    startY += drawCentered(UI_10_FONT_ID, startY, hostnameUrl.c_str());
+    startY += drawCentered(SMALL_FONT_ID, startY, ipUrl.c_str());
+    startY += metrics.verticalSpacing * 2;
+    // Uploaded file list
+    const auto& received = UITheme::getReceivedFiles();
+    const int lineH12 = renderer.getLineHeight(UI_10_FONT_ID);
+    for (const auto& name : received) {
+      drawCentered(UI_10_FONT_ID, startY, name.c_str());
+      startY += lineH12;
+    }
+    // In-progress upload
+    if (webServer) {
+      const auto status = webServer->getWsUploadStatus();
+      if (status.inProgress && !status.filename.empty()) {
+        drawCentered(UI_10_FONT_ID, startY, (std::string("⬆ ") + status.filename).c_str(), true);
+      }
+    }
   } else {
     startY += metrics.verticalSpacing * 2;
 
@@ -460,11 +489,21 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     QrUtils::drawQrCode(renderer, qrBounds, webInfo);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing * 2;
 
-    drawCentered(UI_10_FONT_ID, startY, webInfo.c_str(), true);
-    startY += height10 + 5;
-
+    startY += drawCentered(UI_10_FONT_ID, startY, webInfo.c_str(), true) + 5;
     std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/";
-    drawCentered(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
+    startY += drawCentered(SMALL_FONT_ID, startY, hostnameUrl.c_str(), true);
+    startY += metrics.verticalSpacing * 2;
+    // Uploaded file list
+    for (const auto& name : UITheme::getReceivedFiles()) {
+      startY += drawCentered(UI_10_FONT_ID, startY, name.c_str());
+    }
+    // In-progress upload
+    if (webServer) {
+      const auto status = webServer->getWsUploadStatus();
+      if (status.inProgress && !status.filename.empty()) {
+        drawCentered(UI_10_FONT_ID, startY, (std::string("⬆ ") + status.filename).c_str(), true);
+      }
+    }
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_EXIT), "", "", "");

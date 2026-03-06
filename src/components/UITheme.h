@@ -1,7 +1,8 @@
 #pragma once
-
 #include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "CrossPointSettings.h"
 #include "components/themes/BaseTheme.h"
@@ -33,6 +34,9 @@ class UITheme {
   static bool isHttpServerActive();
   static void setWifiAutoConnecting(bool connecting);
   static bool isWifiAutoConnecting();
+  static void addReceivedFile(const std::string& name);
+  static const std::vector<std::string>& getReceivedFiles();
+  static void clearReceivedFiles();
 
  private:
   const ThemeMetrics* currentMetrics;
