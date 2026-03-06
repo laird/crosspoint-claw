@@ -65,9 +65,6 @@ class CrossPointWebServer {
 
   WsUploadStatus getWsUploadStatus() const;
 
-  // Returns unified upload status covering both WebSocket and HTTP uploads
-  WsUploadStatus getUploadStatus() const;
-
   // Get the port number
   uint16_t getPort() const { return port; }
 

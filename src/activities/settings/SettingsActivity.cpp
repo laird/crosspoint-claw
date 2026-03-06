@@ -75,10 +75,17 @@ void SettingsActivity::onExit() {
 void SettingsActivity::loop() {
   bool hasChangedCategory = false;
 
+  // Handle actions with early return
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-    toggleCurrentSetting();
-    requestUpdate();
-    return;
+    if (selectedSettingIndex == 0) {
+      selectedCategoryIndex = (selectedCategoryIndex < categoryCount - 1) ? (selectedCategoryIndex + 1) : 0;
+      hasChangedCategory = true;
+      requestUpdate();
+    } else {
+      toggleCurrentSetting();
+      requestUpdate();
+      return;
+    }
   }
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
@@ -87,32 +94,31 @@ void SettingsActivity::loop() {
     return;
   }
 
-  // Up/Down navigate the settings list
-  if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-    selectedSettingIndex = ButtonNavigator::nextIndex(selectedSettingIndex, settingsCount);
+  // Handle navigation
+  buttonNavigator.onNextRelease([this] {
+    selectedSettingIndex = ButtonNavigator::nextIndex(selectedSettingIndex, settingsCount + 1);
     requestUpdate();
-  }
+  });
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
-    selectedSettingIndex = ButtonNavigator::previousIndex(selectedSettingIndex, settingsCount);
+  buttonNavigator.onPreviousRelease([this] {
+    selectedSettingIndex = ButtonNavigator::previousIndex(selectedSettingIndex, settingsCount + 1);
     requestUpdate();
-  }
+  });
 
-  // Left/Right switch tabs
-  if (mappedInput.wasPressed(MappedInputManager::Button::Right)) {
+  buttonNavigator.onNextContinuous([this, &hasChangedCategory] {
     hasChangedCategory = true;
     selectedCategoryIndex = ButtonNavigator::nextIndex(selectedCategoryIndex, categoryCount);
     requestUpdate();
-  }
+  });
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Left)) {
+  buttonNavigator.onPreviousContinuous([this, &hasChangedCategory] {
     hasChangedCategory = true;
     selectedCategoryIndex = ButtonNavigator::previousIndex(selectedCategoryIndex, categoryCount);
     requestUpdate();
-  }
+  });
 
   if (hasChangedCategory) {
-    selectedSettingIndex = 0;
+    selectedSettingIndex = (selectedSettingIndex == 0) ? 0 : 1;
     switch (selectedCategoryIndex) {
       case 0:
         currentSettings = &displaySettings;
@@ -132,7 +138,7 @@ void SettingsActivity::loop() {
 }
 
 void SettingsActivity::toggleCurrentSetting() {
-  int selectedSetting = selectedSettingIndex;
+  int selectedSetting = selectedSettingIndex - 1;
   if (selectedSetting < 0 || selectedSetting >= settingsCount) {
     return;
   }
@@ -210,7 +216,7 @@ void SettingsActivity::render(RenderLock&&) {
     tabs.push_back({I18N.get(categoryNames[i]), selectedCategoryIndex == i});
   }
   GUI.drawTabBar(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight}, tabs,
-                 true);
+                 selectedSettingIndex == 0);
 
   const auto& settings = *currentSettings;
   GUI.drawList(
@@ -218,7 +224,7 @@ void SettingsActivity::render(RenderLock&&) {
       Rect{0, metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing, pageWidth,
            pageHeight - (metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.buttonHintsHeight +
                          metrics.verticalSpacing * 2)},
-      settingsCount, selectedSettingIndex,
+      settingsCount, selectedSettingIndex - 1,
       [&settings](int index) { return std::string(I18N.get(settings[index].nameId)); }, nullptr, nullptr,
       [&settings](int i) {
         const auto& setting = settings[i];
@@ -231,20 +237,13 @@ void SettingsActivity::render(RenderLock&&) {
           valueText = I18N.get(setting.enumValues[value]);
         } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
           valueText = std::to_string(SETTINGS.*(setting.valuePtr));
-        } else if (setting.type == SettingType::ACTION) {
-          // Show current language name for Language action; chevron for all actions
-          if (setting.action == SettingAction::Language) {
-            valueText = std::string(I18N.getLanguageName(I18N.getLanguage())) + "  ›";
-          } else {
-            valueText = "›";
-          }
         }
         return valueText;
       },
       true);
 
   // Draw help text
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   // Always use standard refresh for settings screen

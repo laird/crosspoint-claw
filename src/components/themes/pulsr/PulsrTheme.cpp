@@ -7,6 +7,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <string>
 
@@ -26,36 +27,34 @@ namespace {
 namespace M = PulsrMetrics;
 
 // Convenience aliases so the code below stays readable
-constexpr int LEFT_W   = M::LEFT_BAR_W;
-constexpr int TOP_H    = M::TOP_BAR_H;
-constexpr int OUT_R    = M::OUTER_RADIUS;
-constexpr int NAV_GAP  = M::NAV_GAP;
+constexpr int LEFT_W = M::LEFT_BAR_W;
+constexpr int TOP_H = M::TOP_BAR_H;
+constexpr int OUT_R = M::OUTER_RADIUS;
+constexpr int NAV_GAP = M::NAV_GAP;
 
 // Bottom-bar geometry
-constexpr int BTN_COUNT       = 4;
-constexpr int BTN_OUTER_GAP_X = 6;   // gap between adjacent bottom-bar buttons (px)
-constexpr int BTN_MARGIN_Y    = 7;   // top/bottom inset within the 44px bottom bar
-constexpr int BTN_LABEL_Y_OFF = 5;   // baseline offset from top of button box
+constexpr int BTN_COUNT = 4;
+constexpr int BTN_OUTER_GAP_X = 6;  // gap between adjacent bottom-bar buttons (px)
+constexpr int BTN_MARGIN_Y = 7;     // top/bottom inset within the 44px bottom bar
+constexpr int BTN_LABEL_Y_OFF = 5;  // baseline offset from top of button box
 
 // List / content constants
-constexpr int SEL_BAR_W  = 4;   // left-edge indicator width for selected list row
+constexpr int SEL_BAR_W = 4;    // left-edge indicator width for selected list row
 constexpr int LIST_PAD_X = 10;  // horizontal padding inside list rows
-constexpr int CORNER_R   = 3;   // rounded corner radius for list selection highlight
+constexpr int CORNER_R = 3;     // rounded corner radius for list selection highlight
 
 // Tab bar
-constexpr int TAB_PAD_X  = 12;  // horizontal padding inside each tab
-constexpr int TAB_H      = Lm::values.tabBarHeight;
+constexpr int TAB_PAD_X = 12;  // horizontal padding inside each tab
+constexpr int TAB_H = Lm::values.tabBarHeight;
 
 // Pop-up
 constexpr int POPUP_MARGIN_X = 20;
 constexpr int POPUP_MARGIN_Y = 14;
-constexpr int POPUP_Y        = 200;  // y anchor for popup (within content area)
+constexpr int POPUP_Y = 200;  // y anchor for popup (within content area)
 
 // ─── Helper: shift a full-screen Rect into the PULSR content area ────────────
 // Activities pass Rect{0, y, pageWidth, h}; content must start at LEFT_W.
-inline Rect contentRect(const Rect& r) {
-  return Rect(r.x + LEFT_W, r.y, r.width - LEFT_W, r.height);
-}
+inline Rect contentRect(const Rect& r) { return Rect(r.x + LEFT_W, r.y, r.width - LEFT_W, r.height); }
 
 }  // namespace
 
@@ -68,8 +67,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
 
   // ── 1. Left bar (full height, outer corners rounded on the left side) ──────
   renderer.fillRoundedRect(0, 0, LEFT_W, H, OUT_R,
-                           /*tl=*/true, /*tr=*/false, /*bl=*/true, /*br=*/false,
-                           Color::Black);
+                           /*tl=*/true, /*tr=*/false, /*bl=*/true, /*br=*/false, Color::Black);
 
   // ── 2. Top bar strip ────────────────────────────────────────────────────────
   renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, /*black=*/true);
@@ -84,13 +82,13 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
   //
   //  Left bar: 4 segments (Power/HTTP, Up, Down, Battery)
   {
-    constexpr int NUM_SEGS   = 4;
+    constexpr int NUM_SEGS = 4;
     constexpr int LINE_INSET = 8;
     constexpr int SEG_MARGIN = 6;
-    constexpr int PILL_R     = 5;
-    const int zoneTop    = NAV_GAP + 4;
+    constexpr int PILL_R = 5;
+    const int zoneTop = NAV_GAP + 4;
     const int zoneBottom = H - NAV_GAP - 4;
-    const int segH       = (zoneBottom - zoneTop) / NUM_SEGS;
+    const int segH = (zoneBottom - zoneTop) / NUM_SEGS;
 
     // Separator lines between segments
     for (int i = 1; i < NUM_SEGS; i++) {
@@ -105,8 +103,8 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       const int indW = LEFT_W - SEG_MARGIN * 2;
       const int indH = segH - SEG_MARGIN * 2;
       const Color httpColor = UITheme::isNetworkTransferring()
-          ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-          : Color::LightGray;
+                                  ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
+                                  : Color::LightGray;
       renderer.fillRoundedRect(indX, indY, indW, indH, PILL_R, httpColor);
       const char* lbl = "HTTP";
       const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
@@ -116,15 +114,15 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     // Seg 1: reserved for sync status (RSS Feed PR extends this)
   }
 
-    // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
+  // ── 6. Screen title in top bar (white, uppercase, PULSR-12) ────────────────
   {
     const char* raw = (title != nullptr) ? title : "HOME";
     std::string upper(raw);
-    for (char& c : upper) c = (c >= 'a' && c <= 'z') ? c - 32 : c;
-    const int maxW  = W - LEFT_W - 12;
-    const auto lbl  = renderer.truncatedText(PULSR_12_FONT_ID, upper.c_str(), maxW);
-    const int  txtH = renderer.getTextHeight(PULSR_12_FONT_ID);
-    const int  txtY = (TOP_H - txtH) / 2;
+    std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+    const int maxW = W - LEFT_W - 12;
+    const auto lbl = renderer.truncatedText(PULSR_12_FONT_ID, upper.c_str(), maxW);
+    const int txtH = renderer.getTextHeight(PULSR_12_FONT_ID);
+    const int txtY = (TOP_H - txtH) / 2;
     renderer.drawText(PULSR_12_FONT_ID, LEFT_W + 8, txtY, lbl.c_str(), /*black=*/false);
   }
 
@@ -144,7 +142,7 @@ void PulsrTheme::drawHeader(const GfxRenderer& renderer, Rect /*rect*/, const ch
 // drawSubHeader  –  Solid black band with white label text.
 // ─────────────────────────────────────────────────────────────────────────────
 void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label,
-                                const char* rightLabel) const {
+                               const char* rightLabel) const {
   if (rect.height <= 0) return;  // tabBarHeight=0 in PULSR — nothing to draw
   const Rect cr = contentRect(rect);
 
@@ -155,7 +153,7 @@ void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const cha
   const int textH = renderer.getTextHeight(PULSR_10_FONT_ID);
   const int textY = cr.y + (cr.height - textH) / 2;
   if (label != nullptr) {
-    const int maxW  = cr.width - LIST_PAD_X * 2 - (rightLabel != nullptr ? 80 : 0);
+    const int maxW = cr.width - LIST_PAD_X * 2 - (rightLabel != nullptr ? 80 : 0);
     const auto trunc = renderer.truncatedText(PULSR_10_FONT_ID, label, maxW, EpdFontFamily::BOLD);
     renderer.drawText(PULSR_10_FONT_ID, cr.x + LIST_PAD_X, textY, trunc.c_str(),
                       /*black=*/false, EpdFontFamily::BOLD);
@@ -163,9 +161,9 @@ void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const cha
 
   // Optional right-aligned label (also white)
   if (rightLabel != nullptr) {
-    const int rw    = renderer.getTextWidth(SMALL_FONT_ID, rightLabel);
-    const int rh    = renderer.getTextHeight(SMALL_FONT_ID);
-    const int ry    = cr.y + (cr.height - rh) / 2;
+    const int rw = renderer.getTextWidth(SMALL_FONT_ID, rightLabel);
+    const int rh = renderer.getTextHeight(SMALL_FONT_ID);
+    const int ry = cr.y + (cr.height - rh) / 2;
     renderer.drawText(SMALL_FONT_ID, cr.x + cr.width - LIST_PAD_X - rw, ry, rightLabel,
                       /*black=*/false);
   }
@@ -178,19 +176,19 @@ void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const cha
 // Others: white text only on the black bar.
 // Tab labels are abbreviated to 4 uppercase chars to fit the narrow bar.
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
-                             const std::vector<TabInfo>& tabs, bool /*selected*/) const {
+void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const std::vector<TabInfo>& tabs,
+                            bool /*selected*/) const {
   if (tabs.empty()) return;
 
-  const int W         = renderer.getScreenWidth();
+  const int W = renderer.getScreenWidth();
   // Clear the top bar first — erase any screen title drawn by drawHeader
   renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, /*black=*/true);
 
-  const int tabCount  = static_cast<int>(tabs.size());
+  const int tabCount = static_cast<int>(tabs.size());
   // Tabs fill the rest of the top bar
-  const int tabAreaW  = W - LEFT_W - 4;
-  const int tabW      = tabAreaW / tabCount;
-  const int barH      = TOP_H;
+  const int tabAreaW = W - LEFT_W - 4;
+  const int tabW = tabAreaW / tabCount;
+  const int barH = TOP_H;
 
   for (int i = 0; i < tabCount; i++) {
     // Abbreviate label: uppercase, max 4 chars
@@ -201,7 +199,10 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
     }
     // "Controls" → "CONT" is ambiguous; override to the universal abbreviation
     if (abbr[0] == 'C' && abbr[1] == 'O' && abbr[2] == 'N' && abbr[3] == 'T') {
-      abbr[0] = 'C'; abbr[1] = 'T'; abbr[2] = 'R'; abbr[3] = 'L';
+      abbr[0] = 'C';
+      abbr[1] = 'T';
+      abbr[2] = 'R';
+      abbr[3] = 'L';
     }
 
     const int tx = LEFT_W + i * tabW;
@@ -225,23 +226,19 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/,
 // drawList  –  Paged list of items with optional subtitle / value / icon.
 // Selected row: light-gray fill + left-edge indicator bar.
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
-                           int selectedIndex,
-                           const std::function<std::string(int)>& rowTitle,
-                           const std::function<std::string(int)>& rowSubtitle,
-                           const std::function<UIIcon(int)>& rowIcon,
-                           const std::function<std::string(int)>& rowValue,
-                           bool highlightValue) const {
-  const Rect cr      = contentRect(rect);
-  const int rowH     = (rowSubtitle != nullptr) ? Lm::values.listWithSubtitleRowHeight
-                                                : Lm::values.listRowHeight;
+void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, int selectedIndex,
+                          const std::function<std::string(int)>& rowTitle,
+                          const std::function<std::string(int)>& rowSubtitle, const std::function<UIIcon(int)>& rowIcon,
+                          const std::function<std::string(int)>& rowValue, bool highlightValue) const {
+  const Rect cr = contentRect(rect);
+  const int rowH = (rowSubtitle != nullptr) ? Lm::values.listWithSubtitleRowHeight : Lm::values.listRowHeight;
   const int pageItems = cr.height / rowH;
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
 
   // ── Scroll indicator (arrows at right edge of content) ────────────────────
   if (totalPages > 1) {
     constexpr int arrowSz = 6;
-    constexpr int arrowX  = 6;  // offset from right edge of content
+    constexpr int arrowX = 6;  // offset from right edge of content
     const int cx = cr.x + cr.width - arrowX;
     // Up arrow
     for (int i = 0; i < arrowSz; i++) {
@@ -257,8 +254,7 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
 
   // Reduce content width to leave room for scroll indicator
   const int contentW =
-      cr.width - (totalPages > 1 ? (Lm::values.scrollBarWidth + Lm::values.scrollBarRightOffset + 4)
-                                 : 0);
+      cr.width - (totalPages > 1 ? (Lm::values.scrollBarWidth + Lm::values.scrollBarRightOffset + 4) : 0);
   const int maxValueW = 120;
 
   // ── Draw items on the current page ────────────────────────────────────────
@@ -275,8 +271,7 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     }
 
     // Row separator (thin black line at bottom of row)
-    renderer.drawLine(cr.x + SEL_BAR_W + LIST_PAD_X, itemY + rowH - 1,
-                      cr.x + contentW - 1, itemY + rowH - 1);
+    renderer.drawLine(cr.x + SEL_BAR_W + LIST_PAD_X, itemY + rowH - 1, cr.x + contentW - 1, itemY + rowH - 1);
 
     // Value text (right-aligned), computed before title to know available width
     int valueW = 0;
@@ -284,15 +279,14 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     if (rowValue != nullptr) {
       valueStr = rowValue(i);
       valueStr = renderer.truncatedText(PULSR_10_FONT_ID, valueStr.c_str(), maxValueW);
-      valueW   = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X;
+      valueW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X;
     }
 
     // Title text
-    const int titleX  = cr.x + SEL_BAR_W + LIST_PAD_X;
+    const int titleX = cr.x + SEL_BAR_W + LIST_PAD_X;
     const int titleMaxW = contentW - SEL_BAR_W - LIST_PAD_X * 2 - valueW;
-    const int titleH  = renderer.getTextHeight(PULSR_10_FONT_ID);
-    const int titleY  = rowSubtitle != nullptr ? itemY + 5
-                                               : itemY + (rowH - titleH) / 2;
+    const int titleH = renderer.getTextHeight(PULSR_10_FONT_ID);
+    const int titleY = rowSubtitle != nullptr ? itemY + 5 : itemY + (rowH - titleH) / 2;
 
     const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, rowTitle(i).c_str(), titleMaxW);
     renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), /*black=*/true);
@@ -305,8 +299,7 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
 
     // Value text (draw right-aligned)
     if (!valueStr.empty()) {
-      const int vx = cr.x + contentW - renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) -
-                     LIST_PAD_X;
+      const int vx = cr.x + contentW - renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) - LIST_PAD_X;
       const int vy = itemY + (rowH - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2;
       if (isSel && highlightValue) {
         const int boxW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X * 2;
@@ -324,17 +317,17 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
 // The bottom bar is already filled black by drawFrame.  We draw white-outlined
 // boxes for non-empty labels and white text inside them.
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2,
-                                  const char* btn3, const char* btn4) const {
+void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
+                                 const char* btn4) const {
   const GfxRenderer::Orientation origOri = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
-  const int W     = renderer.getScreenWidth();
-  const int H     = renderer.getScreenHeight();
-  const int barY  = H - TOP_H;
-  const int barH  = TOP_H;
+  const int W = renderer.getScreenWidth();
+  const int H = renderer.getScreenHeight();
+  const int barY = H - TOP_H;
+  const int barH = TOP_H;
   const int avail = W - LEFT_W;
-  const int btnW  = avail / BTN_COUNT;  // no gaps – flush dividers only
+  const int btnW = avail / BTN_COUNT;  // no gaps – flush dividers only
 
   const char* labels[BTN_COUNT] = {btn1, btn2, btn3, btn4};
 
@@ -356,7 +349,7 @@ void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
     }
     upper[c] = '\0';
 
-    const int x  = LEFT_W + i * btnW;
+    const int x = LEFT_W + i * btnW;
     const int tw = renderer.getTextWidth(PULSR_10_FONT_ID, upper);
     const int th = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int tx = x + (btnW - tw) / 2;
@@ -371,7 +364,7 @@ void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
 // drawSideButtonHints  –  Not visible in PULSR (left bar serves this role).
 // ─────────────────────────────────────────────────────────────────────────────
 void PulsrTheme::drawSideButtonHints(const GfxRenderer& /*renderer*/, const char* /*topBtn*/,
-                                      const char* /*bottomBtn*/) const {
+                                     const char* /*bottomBtn*/) const {
   // Intentionally empty: PULSR left bar provides navigation context visually.
 }
 
@@ -380,28 +373,27 @@ void PulsrTheme::drawSideButtonHints(const GfxRenderer& /*renderer*/, const char
 // Selected tile: light-gray fill + black border + black text (consistent with list selection).
 // Others: outlined box, black text.
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int buttonCount,
-                                 int selectedIndex,
-                                 const std::function<std::string(int)>& buttonLabel,
-                                 const std::function<UIIcon(int)>& /*rowIcon*/) const {
+void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int buttonCount, int selectedIndex,
+                                const std::function<std::string(int)>& buttonLabel,
+                                const std::function<UIIcon(int)>& /*rowIcon*/) const {
   // 2-column pill grid, bottom-pinned just above the bottom bar.
-  const int W        = renderer.getScreenWidth();
-  const int H        = renderer.getScreenHeight();
-  constexpr int COLS    = 2;
-  constexpr int HGAP    = 8;   // horizontal gap between pills
-  constexpr int VGAP    = 6;   // vertical gap between rows
-  constexpr int BTN_PAD = 8;   // inner horizontal margin for button grid (independent of contentSidePadding)
-  const int tileH    = Lm::values.menuRowHeight;
-  const int tileW    = (W - LEFT_W - BTN_PAD * 2 - HGAP) / COLS;
-  const int rows     = (buttonCount + COLS - 1) / COLS;
-  const int gridH    = rows * tileH + (rows - 1) * VGAP;
-  const int startY   = H - TOP_H - gridH - 8;
-  const int radius   = tileH / 2;  // fully rounded ends = pill shape
+  const int W = renderer.getScreenWidth();
+  const int H = renderer.getScreenHeight();
+  constexpr int COLS = 2;
+  constexpr int HGAP = 8;     // horizontal gap between pills
+  constexpr int VGAP = 6;     // vertical gap between rows
+  constexpr int BTN_PAD = 8;  // inner horizontal margin for button grid (independent of contentSidePadding)
+  const int tileH = Lm::values.menuRowHeight;
+  const int tileW = (W - LEFT_W - BTN_PAD * 2 - HGAP) / COLS;
+  const int rows = (buttonCount + COLS - 1) / COLS;
+  const int gridH = rows * tileH + (rows - 1) * VGAP;
+  const int startY = H - TOP_H - gridH - 8;
+  const int radius = tileH / 2;  // fully rounded ends = pill shape
 
   // PULSR label abbreviation: uppercase and strip generic qualifier words
   auto pulsrLabel = [](const std::string& s) -> std::string {
     std::string u = s;
-    for (char& c : u) c = (c >= 'a' && c <= 'z') ? c - 32 : c;
+    std::transform(u.begin(), u.end(), u.begin(), ::toupper);
     // Strip leading generic words
     auto stripPrefix = [&](const char* pfx) {
       size_t pl = strlen(pfx);
@@ -410,7 +402,7 @@ void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
     // Strip trailing generic qualifiers
     auto stripSuffix = [&](const char* sfx) {
       size_t sl = strlen(sfx);
-      if (u.size() > sl && u.substr(u.size() - sl) == sfx) u = u.substr(0, u.size() - sl);
+      if (u.size() > sl && u.substr(u.size() - sl) == sfx) u.erase(u.size() - sl);
     };
     stripPrefix("FILE ");
     stripPrefix("MY ");
@@ -420,10 +412,10 @@ void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
   };
 
   for (int i = 0; i < buttonCount; i++) {
-    const int col  = i % COLS;
-    const int row  = i / COLS;
-    const int tx   = LEFT_W + BTN_PAD + col * (tileW + HGAP);
-    const int ty   = startY + row * (tileH + VGAP);
+    const int col = i % COLS;
+    const int row = i / COLS;
+    const int tx = LEFT_W + BTN_PAD + col * (tileW + HGAP);
+    const int ty = startY + row * (tileH + VGAP);
     const bool sel = (i == selectedIndex);
 
     if (sel) {
@@ -436,8 +428,7 @@ void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
     const std::string labelStr = pulsrLabel(buttonLabel(i));
     const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, labelStr.c_str());
     const int lh = renderer.getTextHeight(PULSR_10_FONT_ID);
-    renderer.drawText(PULSR_10_FONT_ID, tx + (tileW - lw) / 2, ty + (tileH - lh) / 2,
-                      labelStr.c_str(), /*black=*/true);
+    renderer.drawText(PULSR_10_FONT_ID, tx + (tileW - lw) / 2, ty + (tileH - lh) / 2, labelStr.c_str(), /*black=*/true);
   }
 }
 
@@ -447,15 +438,13 @@ void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
 // Covers are loaded from SD on the first render and saved to the frame buffer
 // via storeCoverBuffer so subsequent renders only redraw selection / text.
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
-                                      const std::vector<RecentBook>& recentBooks,
-                                      const int selectorIndex, bool& coverRendered,
-                                      bool& coverBufferStored, bool& /*bufferRestored*/,
-                                      std::function<bool()> storeCoverBuffer) const {
-  const Rect cr      = contentRect(rect);
+void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
+                                     const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
+                                     bool& /*bufferRestored*/, std::function<bool()> storeCoverBuffer) const {
+  const Rect cr = contentRect(rect);
   const int maxBooks = Lm::values.homeRecentBooksCount;
-  const int count    = std::min(static_cast<int>(recentBooks.size()), maxBooks);
-  const int rowH     = cr.height / maxBooks;
+  const int count = std::min(static_cast<int>(recentBooks.size()), maxBooks);
+  const int rowH = cr.height / maxBooks;
 
   if (count == 0) {
     const int msgY = cr.y + cr.height / 2 - renderer.getTextHeight(PULSR_10_FONT_ID);
@@ -467,11 +456,11 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
   }
 
   // Cover thumbnail geometry – centered vertically within each row
-  const int coverH   = Lm::values.homeCoverHeight;  // stored BMP height
-  const int COVER_W  = coverH * 2 / 3;              // fixed layout width (~2:3 aspect ratio)
-  const int topInset = (rowH - coverH) / 2;         // vertical centering inset
+  const int coverH = Lm::values.homeCoverHeight;  // stored BMP height
+  const int COVER_W = coverH * 2 / 3;             // fixed layout width (~2:3 aspect ratio)
+  const int topInset = (rowH - coverH) / 2;       // vertical centering inset
 
-  const int thumbX    = cr.x + SEL_BAR_W + LIST_PAD_X;  // cover left edge (constant per column)
+  const int thumbX = cr.x + SEL_BAR_W + LIST_PAD_X;  // cover left edge (constant per column)
   const int thumbEndX = thumbX + COVER_W;
 
   // ── Phase 1: Load cover bitmaps from SD (first render only) ──────────────
@@ -502,8 +491,7 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
 
       // Placeholder icon when no cover available
       if (!hasCover) {
-        renderer.drawIcon(CoverIcon, thumbX + (COVER_W - 32) / 2, thumbY + (coverH - 32) / 2,
-                          32, 32);
+        renderer.drawIcon(CoverIcon, thumbX + (COVER_W - 32) / 2, thumbY + (coverH - 32) / 2, 32, 32);
       }
     }
     coverBufferStored = storeCoverBuffer();
@@ -515,10 +503,10 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
   // the restored frame buffer stays visible on the selected row.
   for (int i = 0; i < count; i++) {
     const RecentBook& book = recentBooks[i];
-    const int rowY       = cr.y + i * rowH;
+    const int rowY = cr.y + i * rowH;
     const int coverStartY = rowY + topInset;
-    const int coverEndY   = coverStartY + coverH;
-    const bool isSel      = (i == selectorIndex);
+    const int coverEndY = coverStartY + coverH;
+    const bool isSel = (i == selectorIndex);
 
     if (isSel) {
       // Fill the full row width with grey — the PULSR left bar is already black
@@ -529,18 +517,15 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
       renderer.fillRectDither(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, Color::LightGray);
     }
 
-
     // Title + author in the text column (right of cover)
-    const int textX    = thumbEndX + LIST_PAD_X;
+    const int textX = thumbEndX + LIST_PAD_X;
     const int textMaxW = cr.x + cr.width - textX - LIST_PAD_X;
-    const int titleH   = renderer.getTextHeight(PULSR_10_FONT_ID);
-    const int authH    = renderer.getTextHeight(SMALL_FONT_ID);
-    const int textY    = rowY + (rowH - titleH - 4 - authH) / 2;
+    const int titleH = renderer.getTextHeight(PULSR_10_FONT_ID);
+    const int authH = renderer.getTextHeight(SMALL_FONT_ID);
+    const int textY = rowY + (rowH - titleH - 4 - authH) / 2;
 
-    const auto titleTrunc =
-        renderer.truncatedText(PULSR_10_FONT_ID, book.title.c_str(), textMaxW, EpdFontFamily::BOLD);
-    renderer.drawText(PULSR_10_FONT_ID, textX, textY, titleTrunc.c_str(), /*black=*/true,
-                      EpdFontFamily::BOLD);
+    const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, book.title.c_str(), textMaxW, EpdFontFamily::BOLD);
+    renderer.drawText(PULSR_10_FONT_ID, textX, textY, titleTrunc.c_str(), /*black=*/true, EpdFontFamily::BOLD);
 
     if (!book.author.empty()) {
       const auto authTrunc = renderer.truncatedText(SMALL_FONT_ID, book.author.c_str(), textMaxW);
@@ -552,17 +537,16 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
 // ─────────────────────────────────────────────────────────────────────────────
 // drawProgressBar  –  PULSR-style segmented progress bar (e.g. downloads).
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current,
-                                  size_t total) const {
+void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current, size_t total) const {
   if (total == 0) return;
 
-  const Rect cr  = contentRect(rect);
-  const int pct  = static_cast<int>((static_cast<uint64_t>(current) * 100) / total);
+  const Rect cr = contentRect(rect);
+  const int pct = static_cast<int>((static_cast<uint64_t>(current) * 100) / total);
 
   constexpr int SEG_COUNT = 20;
-  constexpr int SEG_GAP   = 2;
-  const int segW          = (cr.width - SEG_GAP * (SEG_COUNT - 1)) / SEG_COUNT;
-  const int filledSegs    = pct * SEG_COUNT / 100;
+  constexpr int SEG_GAP = 2;
+  const int segW = (cr.width - SEG_GAP * (SEG_COUNT - 1)) / SEG_COUNT;
+  const int filledSegs = pct * SEG_COUNT / 100;
 
   for (int s = 0; s < SEG_COUNT; s++) {
     const int sx = cr.x + s * (segW + SEG_GAP);
@@ -583,12 +567,11 @@ void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t 
 // drawReadingProgressBar  –  Thin progress strip along the top of the content
 // area (visible above the book text, below the black top bar).
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawReadingProgressBar(const GfxRenderer& renderer,
-                                         const size_t bookProgress) const {
+void PulsrTheme::drawReadingProgressBar(const GfxRenderer& renderer, const size_t bookProgress) const {
   const int contentW = renderer.getScreenWidth() - LEFT_W;
-  const int barH     = Lm::values.progressBarHeight;
-  const int barY     = TOP_H;  // immediately below the top bar
-  const int fillW    = contentW * static_cast<int>(bookProgress) / 100;
+  const int barH = Lm::values.progressBarHeight;
+  const int barY = TOP_H;  // immediately below the top bar
+  const int fillW = contentW * static_cast<int>(bookProgress) / 100;
   if (fillW > 0) {
     renderer.fillRect(LEFT_W, barY, fillW, barH, /*black=*/true);
   }
@@ -598,13 +581,13 @@ void PulsrTheme::drawReadingProgressBar(const GfxRenderer& renderer,
 // drawPopup  –  Centered modal message box inside the content area.
 // ─────────────────────────────────────────────────────────────────────────────
 Rect PulsrTheme::drawPopup(const GfxRenderer& renderer, const char* message) const {
-  const int W       = renderer.getScreenWidth();
-  const int textW   = renderer.getTextWidth(PULSR_12_FONT_ID, message);
-  const int textH   = renderer.getLineHeight(PULSR_12_FONT_ID);
-  const int boxW    = textW + POPUP_MARGIN_X * 2;
-  const int boxH    = textH + POPUP_MARGIN_Y * 2;
-  const int boxX    = LEFT_W + (W - LEFT_W - boxW) / 2;
-  const int boxY    = POPUP_Y;
+  const int W = renderer.getScreenWidth();
+  const int textW = renderer.getTextWidth(PULSR_12_FONT_ID, message);
+  const int textH = renderer.getLineHeight(PULSR_12_FONT_ID);
+  const int boxW = textW + POPUP_MARGIN_X * 2;
+  const int boxH = textH + POPUP_MARGIN_Y * 2;
+  const int boxX = LEFT_W + (W - LEFT_W - boxW) / 2;
+  const int boxY = POPUP_Y;
   constexpr int OUT = 2;  // outline thickness
 
   // White frame, then black fill
@@ -622,13 +605,12 @@ Rect PulsrTheme::drawPopup(const GfxRenderer& renderer, const char* message) con
 // ─────────────────────────────────────────────────────────────────────────────
 // fillPopupProgress  –  Fills an expanding progress line inside a popup.
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layout,
-                                    int progress) const {
+void PulsrTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layout, int progress) const {
   constexpr int barH = 4;
-  const int barW     = layout.width - POPUP_MARGIN_X * 2;
-  const int barX     = layout.x + (layout.width - barW) / 2;
-  const int barY     = layout.y + layout.height - POPUP_MARGIN_Y / 2 - barH / 2 - 1;
-  const int fillW    = barW * progress / 100;
+  const int barW = layout.width - POPUP_MARGIN_X * 2;
+  const int barX = layout.x + (layout.width - barW) / 2;
+  const int barY = layout.y + layout.height - POPUP_MARGIN_Y / 2 - barH / 2 - 1;
+  const int fillW = barW * progress / 100;
 
   renderer.fillRect(barX, barY, fillW, barH, /*black=*/false);  // white fill on black bg
   renderer.displayBuffer(HalDisplay::FAST_REFRESH);
@@ -638,19 +620,17 @@ void PulsrTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layo
 // drawTextField  –  Underline decoration for an active text input.
 // ─────────────────────────────────────────────────────────────────────────────
 void PulsrTheme::drawTextField(const GfxRenderer& renderer, Rect rect, int textWidth) const {
-  constexpr int PAD    = 8;
-  const int lineW      = textWidth + PAD * 2;
-  const int lineY      = rect.y + rect.height + renderer.getLineHeight(PULSR_12_FONT_ID) +
-                         Lm::values.verticalSpacing;
-  const int lineX      = rect.x + (rect.width - lineW) / 2;
+  constexpr int PAD = 8;
+  const int lineW = textWidth + PAD * 2;
+  const int lineY = rect.y + rect.height + renderer.getLineHeight(PULSR_12_FONT_ID) + Lm::values.verticalSpacing;
+  const int lineX = rect.x + (rect.width - lineW) / 2;
   renderer.drawLine(lineX, lineY, lineX + lineW, lineY, /*lineWidth=*/2, /*black=*/true);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // drawKeyboardKey  –  Single keyboard key, filled when selected.
 // ─────────────────────────────────────────────────────────────────────────────
-void PulsrTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label,
-                                  bool isSelected) const {
+void PulsrTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label, bool isSelected) const {
   constexpr int R = 3;
   if (isSelected) {
     renderer.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, R, Color::Black);
@@ -659,6 +639,6 @@ void PulsrTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const c
   }
   const int tw = renderer.getTextWidth(PULSR_12_FONT_ID, label);
   const int th = renderer.getTextHeight(PULSR_12_FONT_ID);
-  renderer.drawText(PULSR_12_FONT_ID, rect.x + (rect.width - tw) / 2,
-                    rect.y + (rect.height - th) / 2, label, /*black=*/!isSelected);
+  renderer.drawText(PULSR_12_FONT_ID, rect.x + (rect.width - tw) / 2, rect.y + (rect.height - th) / 2, label,
+                    /*black=*/!isSelected);
 }

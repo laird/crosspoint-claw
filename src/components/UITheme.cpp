@@ -9,9 +9,9 @@
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
-#include "components/themes/pulsr/PulsrTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
+#include "components/themes/pulsr/PulsrTheme.h"
 
 namespace {
 constexpr int SKIP_PAGE_MS = 700;
@@ -19,14 +19,14 @@ constexpr int SKIP_PAGE_MS = 700;
 
 UITheme UITheme::instance;
 
-static bool s_networkConnected   = false;
+static bool s_networkConnected = false;
 static bool s_networkTransferring = false;
 
 void UITheme::setNetworkStatus(bool connected, bool transferring) {
-  s_networkConnected   = connected;
+  s_networkConnected = connected;
   s_networkTransferring = transferring;
 }
-bool UITheme::isNetworkConnected()   { return s_networkConnected; }
+bool UITheme::isNetworkConnected() { return s_networkConnected; }
 bool UITheme::isNetworkTransferring() { return s_networkTransferring; }
 
 UITheme::UITheme() {
