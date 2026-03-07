@@ -1762,6 +1762,7 @@ extern volatile bool dzFlashRequested;
 
 bool CrossPointWebServer::checkDangerZoneAuth() const {
   if (!SETTINGS.dangerZoneEnabled) return false;
+  // Password is required; if none is set, deny access
   if (SETTINGS.dangerZonePassword[0] == '\0') return false;
 
   // Check X-Danger-Zone-Password header first, then ?password= query param

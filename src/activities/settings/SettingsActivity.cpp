@@ -284,7 +284,11 @@ void SettingsActivity::render(RenderLock&&) {
           valueText = value ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
         } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
           const uint8_t value = SETTINGS.*(setting.valuePtr);
-          valueText = I18N.get(setting.enumValues[value]);
+          if (value < setting.enumValues.size()) {
+            valueText = I18N.get(setting.enumValues[value]);
+          } else {
+            valueText = "?";
+          }
         } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
           valueText = std::to_string(SETTINGS.*(setting.valuePtr));
         } else if (setting.type == SettingType::ACTION) {

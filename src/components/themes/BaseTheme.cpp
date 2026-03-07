@@ -115,6 +115,9 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   constexpr int buttonPositions[] = {25, 130, 245, 350};
   const char* labels[] = {btn1, btn2, btn3, btn4};
 
+  // Clear the entire button bar area first to prevent ghosting of previously drawn buttons
+  renderer.fillRect(0, pageHeight - buttonY, renderer.getScreenWidth(), buttonHeight, false);
+
   for (int i = 0; i < 4; i++) {
     // Only draw if the label is non-empty
     if (labels[i] != nullptr && labels[i][0] != '\0') {
@@ -220,7 +223,7 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
   // Draw selection
   int contentWidth = rect.width - 5;
   if (selectedIndex >= 0) {
-    renderer.fillRect(0, rect.y + selectedIndex % pageItems * rowHeight - 2, rect.width, rowHeight);
+    renderer.fillRect(rect.x, rect.y + selectedIndex % pageItems * rowHeight - 2, rect.width, rowHeight);
   }
   // Draw all items
   const auto pageStartIndex = selectedIndex / pageItems * pageItems;

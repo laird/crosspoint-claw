@@ -89,10 +89,11 @@ void OtaUpdateActivity::render(RenderLock&&) {
     LOG_DBG("OTA", "Update progress: %d / %d", updater.getProcessedSize(), updater.getTotalSize());
     updaterProgress = static_cast<float>(updater.getProcessedSize()) / static_cast<float>(updater.getTotalSize());
     // Only update every 2% at the most
-    if (static_cast<int>(updaterProgress * 50) == lastUpdaterPercentage / 2) {
+    const int currentPct = static_cast<int>(updaterProgress * 100);
+    if (currentPct / 2 == lastUpdaterPercentage / 2 && lastUpdaterPercentage != UNINITIALIZED_PERCENTAGE) {
       return;
     }
-    lastUpdaterPercentage = static_cast<int>(updaterProgress * 100);
+    lastUpdaterPercentage = currentPct;
   }
 
   if (state == CHECKING_FOR_UPDATE) {
