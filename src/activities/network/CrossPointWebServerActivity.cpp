@@ -595,8 +595,10 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += metrics.verticalSpacing * 2;
 
     // STA mode: one QR code centered in the content area.
-    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, tr(STR_OPEN_URL_HINT), true, EpdFontFamily::BOLD);
-    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, tr(STR_SCAN_QR_HINT), true, EpdFontFamily::BOLD);
+    // In dark theme, content area is black — use white text (black=false) for readability.
+    const bool textBlack = !UITheme::isInverted();
+    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, tr(STR_OPEN_URL_HINT), textBlack, EpdFontFamily::BOLD);
+    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, tr(STR_SCAN_QR_HINT), textBlack, EpdFontFamily::BOLD);
     startY += metrics.verticalSpacing * 2;
 
     std::string webInfo = "http://" + connectedIP + "/";
@@ -604,22 +606,22 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     QrUtils::drawQrCode(renderer, qrBounds, webInfo);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing * 2;
 
-    startY += drawCenteredWrapped(PULSR_12_FONT_ID, startY, webInfo.c_str(), true);
+    startY += drawCenteredWrapped(PULSR_12_FONT_ID, startY, webInfo.c_str(), textBlack);
     startY += metrics.verticalSpacing;
     std::string hostnameUrl = std::string(tr(STR_OR_HTTP_PREFIX)) + AP_HOSTNAME + ".local/";
-    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, hostnameUrl.c_str(), true);
+    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, hostnameUrl.c_str(), textBlack);
     startY += metrics.verticalSpacing;
 
     // Completed uploads list (oldest first), left-justified in PULSR font
     const int pulsrLineH = renderer.getLineHeight(PULSR_12_FONT_ID);
     for (const auto& name : UITheme::getReceivedFiles()) {
-      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), true);
+      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), textBlack);
       startY += pulsrLineH;
     }
     // In-progress upload
     if (uploadStatus.inProgress && !uploadStatus.filename.empty()) {
       renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, (std::string("● ") + uploadStatus.filename).c_str(),
-                        true, EpdFontFamily::BOLD);
+                        textBlack, EpdFontFamily::BOLD);
     }
   }
 

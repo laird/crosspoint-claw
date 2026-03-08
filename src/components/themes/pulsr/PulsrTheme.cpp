@@ -168,7 +168,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         const char* lbl = "PWR";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, b(true));
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, true);  // pill: always black text on light background
       }
       pillY += pillH + PILL_GAP;
 
@@ -179,7 +179,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         const char* lbl = "WIFI";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, b(true));
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, true);  // pill: always black text on light background
       }
       pillY += pillH + PILL_GAP;
 
@@ -192,7 +192,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         const char* lbl = "HTTP";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, b(true));
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, true);  // pill: always black text on light background
       }
       pillY += pillH + PILL_GAP;
 
@@ -253,13 +253,13 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
             const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, countBuf);
             const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
             renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, countBuf,
-                              b(true));
+                              true);  // pill: always black text on light background
           } else {
             renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
             const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, pillLabel);
             const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
             renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, pillLabel,
-                              b(true));
+                              true);  // pill: always black text on light background
           }
         }
       }
@@ -298,7 +298,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         const char* lbl = "CHRG";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, chrgY + (pillH - lh) / 2, lbl, b(true));
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, chrgY + (pillH - lh) / 2, lbl, true);  // pill: always black text on light background
       }
     }
 
@@ -874,11 +874,11 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
     const int textY = rowY + (rowH - titleH - 4 - authH) / 2;
 
     const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, book.title.c_str(), textMaxW, EpdFontFamily::BOLD);
-    renderer.drawText(PULSR_10_FONT_ID, textX, textY, titleTrunc.c_str(), b(true), EpdFontFamily::BOLD);
+    renderer.drawText(PULSR_10_FONT_ID, textX, textY, titleTrunc.c_str(), isSel ? true : b(true), EpdFontFamily::BOLD);
 
     if (!book.author.empty()) {
       const auto authTrunc = renderer.truncatedText(SMALL_FONT_ID, book.author.c_str(), textMaxW);
-      renderer.drawText(SMALL_FONT_ID, textX, textY + titleH + 4, authTrunc.c_str(), b(true));
+      renderer.drawText(SMALL_FONT_ID, textX, textY + titleH + 4, authTrunc.c_str(), isSel ? true : b(true));
     }
   }
 }

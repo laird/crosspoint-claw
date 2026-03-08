@@ -43,6 +43,7 @@ class UITheme {
   static const std::vector<std::string>& getReceivedFiles();
   static void clearReceivedFiles();
   static bool consumeReceivedFileDirty();  // returns true (and clears) if a new file was added since last call
+  static bool isInverted();  // true when the active theme uses an inverted (dark) colour scheme
 
  private:
   const ThemeMetrics* currentMetrics;

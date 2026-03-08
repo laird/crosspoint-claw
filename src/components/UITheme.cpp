@@ -49,6 +49,11 @@ void UITheme::clearReceivedFiles() {
   s_receivedFiles.clear();
   s_receivedFileDirty = false;
 }
+bool UITheme::isInverted() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) ==
+         CrossPointSettings::UI_THEME::DARK_PULSR;
+}
+
 bool UITheme::consumeReceivedFileDirty() {
   const bool d = s_receivedFileDirty;
   s_receivedFileDirty = false;
