@@ -284,6 +284,138 @@ Without `--repo`, `gh` defaults to the upstream repo (`crosspoint-reader/crosspo
 
 ---
 
+## AI Agent Operations (OpenClaw / Chip)
+
+This section is a complete reference for an AI agent managing these readers. Copy it as a system prompt or context block for any OpenClaw instance.
+
+### Reader Network Info
+
+| Reader | LAN IP | Purpose |
+|--------|--------|---------|
+| Laird's | 192.168.0.234 | Primary |
+| Juliette's | 192.168.0.194 | Secondary |
+
+Danger Zone endpoints require `?password=1814`. All others are open HTTP.
+
+### Check Reader Status
+
+```bash
+curl -s http://192.168.0.234/api/status | python3 -m json.tool
+# Key fields: version, uptime, freeHeap, dangerZoneEnabled, ip
+```
+
+If offline (curl fails), the reader is asleep and needs a physical wake (tap screen or press a button).
+
+### Push Books
+
+**Via crosspoint-feed (preferred — auto-syncs on reader connect):**
+
+```bash
+cp my-story.epub ~/clawd/crosspoint-feed/books/chip/     # AI stories
+cp article.md    ~/clawd/crosspoint-feed/thought/         # Articles (.md works natively)
+cp story.epub    ~/clawd/crosspoint-feed/books/erotic/    # AO3 / erotica
+curl -X POST http://192.168.0.234/api/feed/sync           # trigger immediate sync
+```
+
+**Via direct HTTP upload (immediate, one file):**
+
+```bash
+curl -X POST "http://192.168.0.234/upload?path=/Books/chip/" \
+  -F "file=@my-book.epub"
+```
+
+**Via push-epubs.py (mirror-aware, skips already-sent files):**
+
+```bash
+/home/laird/clawd/venvs/epub-tools/bin/python3 \
+  /home/laird/clawd/scripts/push-epubs.py [--host laird|juliette] [--dry-run]
+```
+
+**Convert Markdown → EPUB:**
+
+```bash
+/home/laird/clawd/venvs/epub-tools/bin/python3 \
+  /home/laird/clawd/scripts/story-to-epub.py my-story.md \
+  --out-dir ~/Documents/epub/Books/chip/
+```
+
+Markdown should have YAML frontmatter: `title`, `author`.
+
+**SD card directories:**
+
+| Path | Content |
+|------|---------|
+| `/Books/chip/` | AI-written stories |
+| `/Books/erotic/` | AO3 downloads |
+| `/Books/humble/` | Purchased books |
+| `/Thought/` | Articles |
+| `/trips/` | Road trip guides |
+| `/News/` | News briefings |
+
+### Push News / Briefings
+
+```bash
+cat > ~/clawd/crosspoint-feed/news/digest.json << 'EOF'
+{"title": "AI Digest — March 8", "date": "2026-03-08", "body": "Content here..."}
+EOF
+curl -X POST http://192.168.0.234/api/feed/sync
+```
+
+### Flash Firmware
+
+**⚠️ Always bump `version` in `platformio.ini` between iterative flashes.** The reader compares the version string in `firmware.bin` to the running version and skips the flash if they match.
+
+```bash
+# 1. Edit platformio.ini → bump version (e.g. 1.3.33-claw → 1.3.34-claw)
+# 2. Build
+cd /home/laird/src/crosspoint-claw && pio run
+# 3. Upload to reader SD card
+curl -X POST "http://192.168.0.234/upload?path=/" \
+  -F "file=@.pio/build/default/firmware.bin;filename=firmware.bin"
+# 4. Reboot to flash (~30s offline, shows "Updating firmware..." on screen)
+curl -X POST "http://192.168.0.234/api/reboot?password=1814"
+# 5. Verify
+sleep 35 && curl -s http://192.168.0.234/api/status | \
+  python3 -c "import json,sys; print(json.load(sys.stdin)['version'])"
+```
+
+Rollback is enabled — if the new firmware crashes before calling `markValid()`, the bootloader silently reverts to the previous version.
+
+### Screenshot Tour (Verify UI Changes)
+
+```bash
+curl -X POST "http://192.168.0.234/api/screenshot-tour?password=1814"
+# WiFi disconnects during tour (~35s), then auto-reconnects
+sleep 40
+# Download a screenshot
+curl -s "http://192.168.0.234/download?path=/screencap/home.bmp" -o home.bmp
+ffmpeg -i home.bmp home.png
+```
+
+Screens: home, settings, browse, recents, opds, file_transfer, network_mode, wifi_scan, keyboard, reader
+
+### List / Delete Files
+
+```bash
+# List root
+curl -s "http://192.168.0.234/api/files?path=/" | python3 -m json.tool
+# Delete a file
+curl -X POST "http://192.168.0.234/delete?path=/Books/chip/old.epub&type=file"
+```
+
+### Known Gotchas
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Flash skipped, old version keeps running | Version string in `platformio.ini` matches running firmware | Bump version before building |
+| Icons render garbled | Icon bitmap is 32×32 but `drawIcon()` renders at 24×24 (row-width mismatch) | Regenerate icons as 24×24 (72 bytes) |
+| Reader stays offline after screenshot tour | `dangerZoneAutoConnect()` skipped when DZ disabled | `reconnectWifiAfterTour()` helper in `main.cpp` handles this |
+| New firmware boots then rolls back | Firmware crashes before `markValid()` | Check crash_report.txt at SD root; fix the bug |
+| OPDS shows WiFi scan screen | Reader is offline — OPDS redirects to WiFi selection | Expected; title fix only applies when connected |
+| Reader won't wake for USB flash | Port disappears when screen sleeps | Tap screen first, port returns within seconds |
+
+---
+
 ## Troubleshooting
 
 | Symptom | Where to look |
