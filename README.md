@@ -143,7 +143,19 @@ Reader (you)
 
 ## Setup
 
-### 1. Flash CrossPoint OpenClaw firmware
+### 1. Flash CrossPoint OpenClaw firmware (first time — human step)
+
+This is a one-time browser-based step. You need a USB-C cable and a Chrome/Edge browser.
+
+1. Download the latest firmware `.bin` from the [Releases page](https://github.com/laird/crosspoint-claw/releases)
+2. Open the web flasher: **https://xteink.dve.al/**
+3. Click **Connect** → select the reader's USB serial port
+4. Upload the `.bin` file and click **Flash**
+5. The flasher handles partitions, OTA metadata, and verification automatically
+
+After this one-time flash, all future firmware updates can be done wirelessly (OTA) — no USB or browser needed. An AI agent (OpenClaw/Chip) can push firmware updates over WiFi automatically.
+
+> **Note for OpenClaw agents**: If the reader already has CrossPoint OpenClaw firmware installed and Danger Zone is enabled, skip this step entirely. Use the OTA flash instructions in the [AI Agent Operations](#ai-agent-operations-openclaw--chip) section instead.
 
 Use the web flasher at https://xteink.dve.al/ with a firmware build from this fork, or follow the USB flash instructions in [Development — Safe Flash](#safe-usb-flash).
 
@@ -287,6 +299,12 @@ Without `--repo`, `gh` defaults to the upstream repo (`crosspoint-reader/crosspo
 ## AI Agent Operations (OpenClaw / Chip)
 
 This section is a complete reference for an AI agent managing these readers. Copy it as a system prompt or context block for any OpenClaw instance.
+
+**Two modes of use:**
+- **Content delivery** (most users): The firmware is already installed. OpenClaw pushes books, news, and articles to the reader over WiFi. No build tools or firmware knowledge needed.
+- **Firmware development**: OpenClaw builds and flashes new firmware wirelessly. Requires PlatformIO installed and the source repo cloned.
+
+> **First-time firmware install** is a human step done once via browser + USB (see [Setup](#setup) above). After that, OpenClaw handles everything wirelessly.
 
 ### Reader Network Info
 
