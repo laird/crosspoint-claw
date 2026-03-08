@@ -552,8 +552,9 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     // Selection highlight: solid fills only (no gray dithering on e-ink).
     // Dark mode: white bar on black bg. Light mode: black bar on white bg.
     if (isSel) {
-      const Color selColor = inverted_ ? Color::White : Color::Black;
-      renderer.fillRect(cr.x, itemY, contentW, rowH, selColor);
+      // fillRect takes bool (true=black, false=white). Use !inverted_ so:
+      // light mode → black bar, dark mode → white bar.
+      renderer.fillRect(cr.x, itemY, contentW, rowH, !inverted_);
     }
 
     // Row separator (thin line at bottom of row)
@@ -617,9 +618,9 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
       const int vy = itemY + (rowH - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2;
       if (isSel && highlightValue) {
         // Value highlight box: solid fill matching selection bar; text is opposite.
-        const Color valBg = inverted_ ? Color::White : Color::Black;
+        // Same fix: fillRect takes bool, not Color. !inverted_ = black in light, white in dark.
         const int boxW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X * 2;
-        renderer.fillRect(vx - LIST_PAD_X, itemY, boxW, rowH, valBg);
+        renderer.fillRect(vx - LIST_PAD_X, itemY, boxW, rowH, !inverted_);
         renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), selTextBlack);
       } else {
         renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), isSel ? selTextBlack : b(true));
