@@ -477,7 +477,11 @@ void dangerZoneAutoConnect() {
   UITheme::setNetworkStatus(true, false);
 
   // Start mDNS
-  MDNS.begin("crosspoint");
+  {
+    const char* hostname = (SETTINGS.deviceName[0] != '\0') ? SETTINGS.deviceName : "crosspoint";
+    MDNS.begin(hostname);
+    LOG_INF("MDNS", "mDNS started: %s.local", hostname);
+  }
 
   // Start web server
   dzWebServer.reset(new CrossPointWebServer());

@@ -201,6 +201,9 @@ class CrossPointSettings {
   uint8_t feedAllowFirmware = 0;  // 0=off, 1=on
   uint8_t feedLogToFile = 1;      // 1=always log to file (TODO: make this a setting)
 
+  // Device name (used as mDNS hostname, e.g. "crosspoint" → crosspoint.local)
+  char deviceName[32] = "crosspoint";
+
   // Danger Zone: automated firmware dev cycle (password-protected)
   uint8_t dangerZoneEnabled = 0;     // 0=off, 1=enabled
   char dangerZonePassword[32] = "";  // Set on physical device only; API returns 403 without it
