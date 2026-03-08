@@ -21,6 +21,7 @@ extern "C" const char* getVersionString();
 #include "components/icons/file24.h"
 #include "components/icons/folder24.h"
 #include "components/icons/hotspot.h"
+#include "components/icons/library.h"
 #include "components/icons/image24.h"
 #include "components/icons/recent.h"
 #include "components/icons/settings2.h"
@@ -80,10 +81,10 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
 
   // ── 1. Left bar (full height, outer corners rounded on the left side) ──────
   renderer.fillRoundedRect(0, 0, LEFT_W, H, OUT_R,
-                           /*tl=*/true, /*tr=*/false, /*bl=*/true, /*br=*/false, Color::Black);
+                           /*tl=*/true, /*tr=*/false, /*bl=*/true, /*br=*/false, col(col(Color::Black)));
 
   // ── 2. Top bar strip ────────────────────────────────────────────────────────
-  renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, /*black=*/true);
+  renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, b(true));
 
   // ── Version string — right-aligned in top bar, white text ──────────────────
   {
@@ -95,12 +96,15 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       const int vh = renderer.getTextHeight(SMALL_FONT_ID);
       const int vx = W - vw - margin;
       const int vy = (TOP_H - vh) / 2;
-      renderer.drawText(SMALL_FONT_ID, vx, vy, ver, /*black=*/false);
+      renderer.drawText(SMALL_FONT_ID, vx, vy, ver, b(false));
     }
   }
 
   // ── 3. Bottom bar strip ─────────────────────────────────────────────────────
-  renderer.fillRect(LEFT_W, H - TOP_H, W - LEFT_W, TOP_H, /*black=*/true);
+  renderer.fillRect(LEFT_W, H - TOP_H, W - LEFT_W, TOP_H, b(true));
+
+  // ── 3b. Content area fill (dark theme only — light theme leaves it white from clearScreen) ──
+  renderer.fillRect(LEFT_W, TOP_H, W - LEFT_W, H - TOP_H * 2, b(false));
 
   // ── 4-7. Left-bar segments — align with physical buttons (PWR / UP / DOWN / BATT)
   //
@@ -131,7 +135,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     // ── Separator lines between segments ──────────────────────────────────────
     for (int i = 1; i < NUM_SEGS; i++) {
       const int lineY = zoneTop + segH * i;
-      renderer.drawLine(LINE_INSET, lineY, LEFT_W - LINE_INSET, lineY, /*black=*/false);
+      renderer.drawLine(LINE_INSET, lineY, LEFT_W - LINE_INSET, lineY, b(false));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -144,64 +148,64 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       int pillY = seg0Top + SEG_MARGIN;
 
       // PWR pill — always shown, grey background, black "PWR" label
-      renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, Color::LightGray);
+      renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, col(col(Color::LightGray)));
       {
         const char* lbl = "PWR";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, b(true));
       }
       pillY += pillH + PILL_GAP;
 
       // WIFI pill — pulsing while DZ is attempting auto-connect on boot
       if (UITheme::isWifiAutoConnecting()) {
-        const Color wifiColor = (millis() / 500) % 2 == 0 ? Color::White : Color::DarkGray;
+        const Color wifiColor = (millis() / 500) % 2 == 0 ? col(col(Color::White)) : col(col(Color::DarkGray));
         renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, wifiColor);
         const char* lbl = "WIFI";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, b(true));
       }
       pillY += pillH + PILL_GAP;
 
       // HTTP pill — only when web server is active
       if (UITheme::isHttpServerActive()) {
         const Color httpColor = UITheme::isNetworkTransferring()
-                                    ? ((millis() / 600) % 2 == 0 ? Color::White : Color::LightGray)
-                                    : Color::LightGray;
+                                    ? ((millis() / 600) % 2 == 0 ? col(col(Color::White)) : col(col(Color::LightGray)))
+                                    : col(col(Color::LightGray));
         renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
         const char* lbl = "HTTP";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, /*black=*/true);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, b(true));
       }
       pillY += pillH + PILL_GAP;
 
       // FEED pill — colour + label reflect sync state; falls back to DZ pill when idle
       {
         const auto feedState = RssFeedSync::getState();
-        Color feedColor = Color::Black;  // invisible (IDLE/DONE)
+        Color feedColor = col(col(Color::Black));  // invisible (IDLE/DONE)
         bool showPill = false;
         const char* pillLabel = nullptr;
         switch (feedState) {
           case RssFeedSync::State::FETCHING:
-            feedColor = Color::LightGray;
+            feedColor = col(col(Color::LightGray));
             showPill = true;
             break;
           case RssFeedSync::State::PARSING:
-            feedColor = ((millis() / 500) % 2 == 0 ? Color::LightGray : Color::DarkGray);
+            feedColor = ((millis() / 500) % 2 == 0 ? col(col(Color::LightGray)) : col(col(Color::DarkGray)));
             showPill = true;
             break;
           case RssFeedSync::State::DOWNLOADING:
-            feedColor = ((millis() / 400) % 2 == 0 ? Color::White : Color::LightGray);
+            feedColor = ((millis() / 400) % 2 == 0 ? col(col(Color::White)) : col(col(Color::LightGray)));
             showPill = true;
             break;
           case RssFeedSync::State::ERROR:
-            feedColor = Color::White;
+            feedColor = col(col(Color::White));
             showPill = true;
             break;
           case RssFeedSync::State::DONE:
-            feedColor = Color::LightGray;
+            feedColor = col(col(Color::LightGray));
             showPill = true;
             break;
           default:
@@ -212,7 +216,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         } else if (SETTINGS.dangerZoneEnabled) {
           // Show "DZ" warning pill when Danger Zone is active and feed is idle
           showPill = true;
-          feedColor = ((millis() / 800) % 2 == 0 ? Color::White : Color::DarkGray);
+          feedColor = ((millis() / 800) % 2 == 0 ? col(col(Color::White)) : col(col(Color::DarkGray)));
           pillLabel = "DZON";
         }
         if (showPill && pillLabel) {
@@ -220,10 +224,10 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
             // Progress bar pill: light-gray background, dark-gray fill, "N/total" counter
             int dlCurrent = 0, dlTotal = 0;
             RssFeedSync::getProgress(dlCurrent, dlTotal);
-            renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, Color::LightGray);
+            renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, col(Color::LightGray));
             if (dlTotal > 0 && dlCurrent > 0) {
               const int fillW = std::max(PILL_R * 2, (dlCurrent * pillW) / dlTotal);
-              renderer.fillRoundedRect(pillX, pillY, std::min(fillW, pillW), pillH, PILL_R, Color::DarkGray);
+              renderer.fillRoundedRect(pillX, pillY, std::min(fillW, pillW), pillH, PILL_R, col(Color::DarkGray));
             }
             char countBuf[10];
             if (dlTotal > 0) {
@@ -234,13 +238,13 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
             const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, countBuf);
             const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
             renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, countBuf,
-                              /*black=*/true);
+                              b(true));
           } else {
             renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
             const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, pillLabel);
             const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
             renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, pillLabel,
-                              /*black=*/true);
+                              b(true));
           }
         }
       }
@@ -260,14 +264,14 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       for (int row = 0; row < TRI_H; row++) {
         const int hw = (TRI_W * row) / TRI_H;
         const int y = divY - GAP - TRI_H + row;
-        renderer.drawLine(cx - hw, y, cx + hw, y, /*black=*/false);
+        renderer.drawLine(cx - hw, y, cx + hw, y, b(false));
       }
 
       // Down triangle: base near divider, tip below
       for (int row = 0; row < TRI_H; row++) {
         const int hw = (TRI_W * row) / TRI_H;
         const int y = divY + GAP + TRI_H - row;
-        renderer.drawLine(cx - hw, y, cx + hw, y, /*black=*/false);
+        renderer.drawLine(cx - hw, y, cx + hw, y, b(false));
       }
 
       // CHRG pill — bottom of Seg 2, just above the Seg 2/3 divider
@@ -275,11 +279,11 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       if (usbConnected) {
         const int seg2Bottom = zoneTop + segH * 3;  // = seg3 top = seg2/3 divider
         const int chrgY = seg2Bottom - SEG_MARGIN - pillH;
-        renderer.fillRoundedRect(pillX, chrgY, pillW, pillH, PILL_R, Color::LightGray);
+        renderer.fillRoundedRect(pillX, chrgY, pillW, pillH, PILL_R, col(Color::LightGray));
         const char* lbl = "CHRG";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, chrgY + (pillH - lh) / 2, lbl, /*black=*/true);
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, chrgY + (pillH - lh) / 2, lbl, b(true));
       }
     }
 
@@ -301,12 +305,12 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       const int barH = segH - BAR_MARGIN_TOP - BAR_MARGIN_BOT;
 
       // Outline
-      renderer.drawRoundedRect(barX, barY, barW, barH, 1, BAR_R, /*black=*/false);
+      renderer.drawRoundedRect(barX, barY, barW, barH, 1, BAR_R, b(false));
 
       // Fill from bottom: white = charged portion
       const int fillH = (barH * pct) / 100;
       if (fillH > 0) {
-        renderer.fillRoundedRect(barX, barY + (barH - fillH), barW, fillH, BAR_R, Color::White);
+        renderer.fillRoundedRect(barX, barY + (barH - fillH), barW, fillH, BAR_R, col(Color::White));
       }
 
       // Percentage text centred below bar
@@ -314,7 +318,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       const int tw = renderer.getTextWidth(PULSR_10_FONT_ID, pctStr.c_str());
       const int th = renderer.getTextHeight(PULSR_10_FONT_ID);
       const int txtY = seg3Top + segH - BAR_MARGIN_BOT + (BAR_MARGIN_BOT - th) / 2;
-      renderer.drawText(PULSR_10_FONT_ID, (LEFT_W - tw) / 2, txtY, pctStr.c_str(), /*black=*/false);
+      renderer.drawText(PULSR_10_FONT_ID, (LEFT_W - tw) / 2, txtY, pctStr.c_str(), b(false));
     }
   }
 
@@ -327,7 +331,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
     const auto lbl = renderer.truncatedText(PULSR_12_FONT_ID, upper.c_str(), maxW);
     const int txtH = renderer.getTextHeight(PULSR_12_FONT_ID);
     const int txtY = (TOP_H - txtH) / 2;
-    renderer.drawText(PULSR_12_FONT_ID, LEFT_W + 8, txtY, lbl.c_str(), /*black=*/false);
+    renderer.drawText(PULSR_12_FONT_ID, LEFT_W + 8, txtY, lbl.c_str(), b(false));
   }
 
   // ── 7. Battery now rendered in seg 3 of the left-bar block above ───────────
@@ -351,7 +355,7 @@ void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const cha
   const Rect cr = contentRect(rect);
 
   // Solid black background across the content width
-  renderer.fillRect(cr.x, cr.y, cr.width, cr.height, /*black=*/true);
+  renderer.fillRect(cr.x, cr.y, cr.width, cr.height, b(true));
 
   // White label text, left-aligned with a small inset
   const int textH = renderer.getTextHeight(PULSR_10_FONT_ID);
@@ -360,7 +364,7 @@ void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const cha
     const int maxW = cr.width - LIST_PAD_X * 2 - (rightLabel != nullptr ? 80 : 0);
     const auto trunc = renderer.truncatedText(PULSR_10_FONT_ID, label, maxW, EpdFontFamily::BOLD);
     renderer.drawText(PULSR_10_FONT_ID, cr.x + LIST_PAD_X, textY, trunc.c_str(),
-                      /*black=*/false, EpdFontFamily::BOLD);
+                      b(false), EpdFontFamily::BOLD);
   }
 
   // Optional right-aligned label (also white)
@@ -369,7 +373,7 @@ void PulsrTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const cha
     const int rh = renderer.getTextHeight(SMALL_FONT_ID);
     const int ry = cr.y + (cr.height - rh) / 2;
     renderer.drawText(SMALL_FONT_ID, cr.x + cr.width - LIST_PAD_X - rw, ry, rightLabel,
-                      /*black=*/false);
+                      b(false));
   }
 }
 
@@ -386,7 +390,7 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const st
 
   const int W = renderer.getScreenWidth();
   // Clear the top bar first — erase any screen title drawn by drawHeader
-  renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, /*black=*/true);
+  renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, b(true));
 
   const int tabCount = static_cast<int>(tabs.size());
   // Tabs fill the rest of the top bar
@@ -424,11 +428,11 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const st
     if (tabs[i].selected) {
       // White filled pill with black text
       constexpr int PAD_X = 6, PAD_Y = 5;
-      renderer.fillRect(tx + 2, PAD_Y, tabW - 4, barH - PAD_Y * 2, /*black=*/false);
-      renderer.drawText(PULSR_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, /*black=*/true);
+      renderer.fillRect(tx + 2, PAD_Y, tabW - 4, barH - PAD_Y * 2, b(false));
+      renderer.drawText(PULSR_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, b(true));
     } else {
       // White text on black bar
-      renderer.drawText(PULSR_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, /*black=*/false);
+      renderer.drawText(PULSR_10_FONT_ID, tx + (tabW - tw) / 2, ty, abbr, b(false));
     }
   }
 }
@@ -453,6 +457,8 @@ static const uint8_t* pulsrListIcon(UIIcon icon) {
       return Settings2Icon;
     case UIIcon::Transfer:
       return TransferIcon;
+    case UIIcon::Library:
+      return LibraryIcon;
     case UIIcon::Wifi:
       return WifiIcon;
     case UIIcon::Hotspot:
@@ -481,13 +487,13 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const int cx = cr.x + cr.width - arrowX;
     // Up arrow
     for (int i = 0; i < arrowSz; i++) {
-      renderer.drawLine(cx - i, cr.y + i, cx + i, cr.y + i);
+      renderer.drawLine(cx - i, cr.y + i, cx + i, cr.y + i, b(true));
     }
     // Down arrow
     const int arrowBot = cr.y + cr.height - 1;
     for (int i = 0; i < arrowSz; i++) {
       const int lw = arrowSz - i;
-      renderer.drawLine(cx - lw, arrowBot - i, cx + lw, arrowBot - i);
+      renderer.drawLine(cx - lw, arrowBot - i, cx + lw, arrowBot - i, b(true));
     }
   }
 
@@ -506,11 +512,12 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     // Selection highlight: light-gray row fill flush to content edge
     // (no separate left indicator bar — the PULSR left bar already provides that anchor)
     if (isSel) {
-      renderer.fillRectDither(cr.x, itemY, contentW, rowH, Color::LightGray);
+      renderer.fillRectDither(cr.x, itemY, contentW, rowH, col(Color::LightGray));
     }
 
-    // Row separator (thin black line at bottom of row)
-    renderer.drawLine(cr.x + SEL_BAR_W + LIST_PAD_X, itemY + rowH - 1, cr.x + contentW - 1, itemY + rowH - 1);
+    // Row separator (thin line at bottom of row)
+    renderer.drawLine(cr.x + SEL_BAR_W + LIST_PAD_X, itemY + rowH - 1, cr.x + contentW - 1, itemY + rowH - 1,
+                      b(true));
 
     // Value text (right-aligned), computed before title to know available width
     int valueW = 0;
@@ -530,7 +537,11 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
         iconW = ICON_SZ + LIST_PAD_X;
         const int iconX = cr.x + SEL_BAR_W + LIST_PAD_X;
         const int iconY2 = itemY + (rowH - ICON_SZ) / 2;
-        renderer.drawIcon(bmp, iconX, iconY2, ICON_SZ, ICON_SZ);
+        if (inverted_) {
+          renderer.drawIconInverted(bmp, iconX, iconY2, ICON_SZ, ICON_SZ);
+        } else {
+          renderer.drawIcon(bmp, iconX, iconY2, ICON_SZ, ICON_SZ);
+        }
       }
     }
 
@@ -541,12 +552,12 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const int titleY = rowSubtitle != nullptr ? itemY + 5 : itemY + (rowH - titleH) / 2;
 
     const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, rowTitle(i).c_str(), titleMaxW);
-    renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), /*black=*/true);
+    renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), b(true));
 
     // Subtitle text
     if (rowSubtitle != nullptr) {
       const auto sub = renderer.truncatedText(SMALL_FONT_ID, rowSubtitle(i).c_str(), titleMaxW);
-      renderer.drawText(SMALL_FONT_ID, titleX, itemY + titleH + 8, sub.c_str(), /*black=*/true);
+      renderer.drawText(SMALL_FONT_ID, titleX, itemY + titleH + 8, sub.c_str(), b(true));
     }
 
     // Value text (draw right-aligned)
@@ -555,10 +566,10 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
       const int vy = itemY + (rowH - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2;
       if (isSel && highlightValue) {
         const int boxW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X * 2;
-        renderer.fillRect(vx - LIST_PAD_X, itemY, boxW, rowH, /*black=*/true);
-        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), /*black=*/false);
+        renderer.fillRect(vx - LIST_PAD_X, itemY, boxW, rowH, b(true));
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), b(false));
       } else {
-        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), /*black=*/true);
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), b(true));
       }
     }
   }
@@ -583,10 +594,17 @@ void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
 
   const char* labels[BTN_COUNT] = {btn1, btn2, btn3, btn4};
 
-  // White vertical separator lines between button zones
+  // Clear entire button bar with black before drawing — prevents e-ink ghost artifacts
+  renderer.fillRect(LEFT_W, barY, W - LEFT_W, barH, b(true));
+
+  // White vertical separator lines — only between two zones that both have content
   for (int i = 1; i < BTN_COUNT; i++) {
-    const int lx = LEFT_W + i * btnW;
-    renderer.drawLine(lx, barY, lx, barY + barH - 1, /*black=*/false);
+    const bool leftHas = labels[i - 1] != nullptr && labels[i - 1][0] != '\0';
+    const bool rightHas = labels[i] != nullptr && labels[i][0] != '\0';
+    if (leftHas && rightHas) {
+      const int lx = LEFT_W + i * btnW;
+      renderer.drawLine(lx, barY, lx, barY + barH - 1, b(false));
+    }
   }
 
   // White labels or directional triangles centered in each zone
@@ -620,13 +638,13 @@ void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
       // Tip up, base down, centered
       for (int row = 0; row < TH; row++) {
         const int hw = (TW * row) / TH;
-        renderer.drawLine(cx - hw, cy - TH / 2 + row, cx + hw, cy - TH / 2 + row, /*black=*/false);
+        renderer.drawLine(cx - hw, cy - TH / 2 + row, cx + hw, cy - TH / 2 + row, b(false));
       }
     } else if (labelIs("down")) {
       // Tip down, base up, centered
       for (int row = 0; row < TH; row++) {
         const int hw = (TW * row) / TH;
-        renderer.drawLine(cx - hw, cy + TH / 2 - row, cx + hw, cy + TH / 2 - row, /*black=*/false);
+        renderer.drawLine(cx - hw, cy + TH / 2 - row, cx + hw, cy + TH / 2 - row, b(false));
       }
     } else if (labelIs("left")) {
       // Tip left, base anchored near RIGHT edge of zone (nearest divider)
@@ -634,14 +652,14 @@ void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
       const int baseX = x + btnW - TD;
       for (int j = -TW; j <= TW; j++) {
         const int w = TH * (TW - abs(j)) / TW;
-        renderer.drawLine(baseX - w, cy + j, baseX, cy + j, /*black=*/false);
+        renderer.drawLine(baseX - w, cy + j, baseX, cy + j, b(false));
       }
     } else if (labelIs("right")) {
       // Tip right, base anchored near LEFT edge of zone (nearest divider)
       const int baseX = x + TD;
       for (int j = -TW; j <= TW; j++) {
         const int w = TH * (TW - abs(j)) / TW;
-        renderer.drawLine(baseX, cy + j, baseX + w, cy + j, /*black=*/false);
+        renderer.drawLine(baseX, cy + j, baseX + w, cy + j, b(false));
       }
     } else {
       // Default: uppercase text label
@@ -653,7 +671,7 @@ void PulsrTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const 
       upper[c] = '\0';
       const int tw = renderer.getTextWidth(PULSR_10_FONT_ID, upper);
       const int th = renderer.getCapHeight(PULSR_10_FONT_ID);
-      renderer.drawText(PULSR_10_FONT_ID, cx - tw / 2, cy - th / 2, upper, /*black=*/false);
+      renderer.drawText(PULSR_10_FONT_ID, cx - tw / 2, cy - th / 2, upper, b(false));
     }
   }
 
@@ -712,23 +730,23 @@ void PulsrTheme::drawButtonMenu(GfxRenderer& renderer, Rect /*rect*/, int button
   };
 
   for (int i = 0; i < buttonCount; i++) {
-    const int col = i % COLS;
+    const int tileCol = i % COLS;
     const int row = i / COLS;
-    const int tx = LEFT_W + BTN_PAD + col * (tileW + HGAP);
+    const int tx = LEFT_W + BTN_PAD + tileCol * (tileW + HGAP);
     const int ty = startY + row * (tileH + VGAP);
     const bool sel = (i == selectedIndex);
 
     if (sel) {
       // Selected: light-gray pill, black outline, black text
-      renderer.fillRoundedRect(tx, ty, tileW, tileH, radius, Color::LightGray);
+      renderer.fillRoundedRect(tx, ty, tileW, tileH, radius, col(Color::LightGray));
     }
     // Always draw outline (selected and unselected)
-    renderer.drawRoundedRect(tx, ty, tileW, tileH, /*lineWidth=*/1, radius, /*black=*/true);
+    renderer.drawRoundedRect(tx, ty, tileW, tileH, /*lineWidth=*/1, radius, b(true));
 
     const std::string labelStr = pulsrLabel(buttonLabel(i));
     const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, labelStr.c_str());
     const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-    renderer.drawText(PULSR_10_FONT_ID, tx + (tileW - lw) / 2, ty + (tileH - lh) / 2, labelStr.c_str(), /*black=*/true);
+    renderer.drawText(PULSR_10_FONT_ID, tx + (tileW - lw) / 2, ty + (tileH - lh) / 2, labelStr.c_str(), b(true));
   }
 }
 
@@ -755,8 +773,8 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
       const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
       const int w1 = renderer.getTextWidth(PULSR_10_FONT_ID, line1);
       const int w2 = renderer.getTextWidth(PULSR_10_FONT_ID, line2);
-      renderer.drawText(PULSR_10_FONT_ID, cr.x + (cr.width - w1) / 2, msgY, line1, /*black=*/true);
-      renderer.drawText(PULSR_10_FONT_ID, cr.x + (cr.width - w2) / 2, msgY + lh + 4, line2, /*black=*/true);
+      renderer.drawText(PULSR_10_FONT_ID, cr.x + (cr.width - w1) / 2, msgY, line1, b(true));
+      renderer.drawText(PULSR_10_FONT_ID, cr.x + (cr.width - w2) / 2, msgY + lh + 4, line2, b(true));
     }
     coverRendered = true;
     return;
@@ -794,11 +812,15 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
       }
 
       // Cover outline (always drawn)
-      renderer.drawRect(thumbX, thumbY, COVER_W, coverH, /*black=*/true);
+      renderer.drawRect(thumbX, thumbY, COVER_W, coverH, b(true));
 
       // Placeholder icon when no cover available
       if (!hasCover) {
-        renderer.drawIcon(CoverIcon, thumbX + (COVER_W - 32) / 2, thumbY + (coverH - 32) / 2, 32, 32);
+        if (inverted_) {
+          renderer.drawIconInverted(CoverIcon, thumbX + (COVER_W - 32) / 2, thumbY + (coverH - 32) / 2, 32, 32);
+        } else {
+          renderer.drawIcon(CoverIcon, thumbX + (COVER_W - 32) / 2, thumbY + (coverH - 32) / 2, 32, 32);
+        }
       }
     }
     coverBufferStored = storeCoverBuffer();
@@ -818,10 +840,10 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
     if (isSel) {
       // Fill the full row width with grey — the PULSR left bar is already black
       // so no separate selection indicator is needed and the left edge stays flush.
-      renderer.fillRectDither(cr.x, rowY, cr.width, topInset, Color::LightGray);
-      renderer.fillRectDither(cr.x, coverEndY, cr.width, topInset, Color::LightGray);
-      renderer.fillRectDither(cr.x, coverStartY, thumbX - cr.x, coverH, Color::LightGray);
-      renderer.fillRectDither(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, Color::LightGray);
+      renderer.fillRectDither(cr.x, rowY, cr.width, topInset, col(Color::LightGray));
+      renderer.fillRectDither(cr.x, coverEndY, cr.width, topInset, col(Color::LightGray));
+      renderer.fillRectDither(cr.x, coverStartY, thumbX - cr.x, coverH, col(Color::LightGray));
+      renderer.fillRectDither(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, col(Color::LightGray));
     }
 
     // Title + author in the text column (right of cover)
@@ -832,11 +854,11 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
     const int textY = rowY + (rowH - titleH - 4 - authH) / 2;
 
     const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, book.title.c_str(), textMaxW, EpdFontFamily::BOLD);
-    renderer.drawText(PULSR_10_FONT_ID, textX, textY, titleTrunc.c_str(), /*black=*/true, EpdFontFamily::BOLD);
+    renderer.drawText(PULSR_10_FONT_ID, textX, textY, titleTrunc.c_str(), b(true), EpdFontFamily::BOLD);
 
     if (!book.author.empty()) {
       const auto authTrunc = renderer.truncatedText(SMALL_FONT_ID, book.author.c_str(), textMaxW);
-      renderer.drawText(SMALL_FONT_ID, textX, textY + titleH + 4, authTrunc.c_str(), /*black=*/true);
+      renderer.drawText(SMALL_FONT_ID, textX, textY + titleH + 4, authTrunc.c_str(), b(true));
     }
   }
 }
@@ -858,16 +880,16 @@ void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t 
   for (int s = 0; s < SEG_COUNT; s++) {
     const int sx = cr.x + s * (segW + SEG_GAP);
     if (s < filledSegs) {
-      renderer.fillRect(sx, cr.y, segW, cr.height, /*black=*/true);
+      renderer.fillRect(sx, cr.y, segW, cr.height, b(true));
     } else {
-      renderer.drawRect(sx, cr.y, segW, cr.height);
+      renderer.drawRect(sx, cr.y, segW, cr.height, b(true));
     }
   }
 
   // Percentage label centered below bar
   char pctBuf[8];
   snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
-  renderer.drawCenteredText(PULSR_10_FONT_ID, cr.y + cr.height + 10, pctBuf);
+  renderer.drawCenteredText(PULSR_10_FONT_ID, cr.y + cr.height + 10, pctBuf, b(true));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -880,7 +902,7 @@ void PulsrTheme::drawReadingProgressBar(const GfxRenderer& renderer, const size_
   const int barY = TOP_H;  // immediately below the top bar
   const int fillW = contentW * static_cast<int>(bookProgress) / 100;
   if (fillW > 0) {
-    renderer.fillRect(LEFT_W, barY, fillW, barH, /*black=*/true);
+    renderer.fillRect(LEFT_W, barY, fillW, barH, b(true));
   }
 }
 
@@ -898,12 +920,12 @@ Rect PulsrTheme::drawPopup(const GfxRenderer& renderer, const char* message) con
   constexpr int OUT = 2;  // outline thickness
 
   // White frame, then black fill
-  renderer.fillRect(boxX - OUT, boxY - OUT, boxW + OUT * 2, boxH + OUT * 2, /*black=*/false);
-  renderer.fillRect(boxX, boxY, boxW, boxH, /*black=*/true);
+  renderer.fillRect(boxX - OUT, boxY - OUT, boxW + OUT * 2, boxH + OUT * 2, b(false));
+  renderer.fillRect(boxX, boxY, boxW, boxH, b(true));
 
   const int tx = boxX + (boxW - textW) / 2;
   const int ty = boxY + POPUP_MARGIN_Y - 2;
-  renderer.drawText(PULSR_12_FONT_ID, tx, ty, message, /*black=*/false);
+  renderer.drawText(PULSR_12_FONT_ID, tx, ty, message, b(false));
   renderer.displayBuffer();
 
   return Rect{boxX, boxY, boxW, boxH};
@@ -919,7 +941,7 @@ void PulsrTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layo
   const int barY = layout.y + layout.height - POPUP_MARGIN_Y / 2 - barH / 2 - 1;
   const int fillW = barW * progress / 100;
 
-  renderer.fillRect(barX, barY, fillW, barH, /*black=*/false);  // white fill on black bg
+  renderer.fillRect(barX, barY, fillW, barH, b(false));  // white fill on black bg
   renderer.displayBuffer(HalDisplay::FAST_REFRESH);
 }
 
@@ -931,7 +953,7 @@ void PulsrTheme::drawTextField(const GfxRenderer& renderer, Rect rect, int textW
   const int lineW = textWidth + PAD * 2;
   const int lineY = rect.y + rect.height + renderer.getLineHeight(PULSR_12_FONT_ID) + Lm::values.verticalSpacing;
   const int lineX = rect.x + (rect.width - lineW) / 2;
-  renderer.drawLine(lineX, lineY, lineX + lineW, lineY, /*lineWidth=*/2, /*black=*/true);
+  renderer.drawLine(lineX, lineY, lineX + lineW, lineY, /*lineWidth=*/2, b(true));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -940,12 +962,12 @@ void PulsrTheme::drawTextField(const GfxRenderer& renderer, Rect rect, int textW
 void PulsrTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const char* label, bool isSelected) const {
   constexpr int R = 3;
   if (isSelected) {
-    renderer.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, R, Color::Black);
+    renderer.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, R, col(Color::Black));
   } else {
-    renderer.drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 1, R, /*black=*/true);
+    renderer.drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 1, R, b(true));
   }
   const int tw = renderer.getTextWidth(PULSR_12_FONT_ID, label);
   const int th = renderer.getTextHeight(PULSR_12_FONT_ID);
   renderer.drawText(PULSR_12_FONT_ID, rect.x + (rect.width - tw) / 2, rect.y + (rect.height - th) / 2, label,
-                    /*black=*/!isSelected);
+                    b(!isSelected));
 }
