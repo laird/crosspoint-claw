@@ -12,6 +12,7 @@
 #include "components/themes/BaseTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
+#include "components/themes/pulsr/DarkPulsrTheme.h"
 #include "components/themes/pulsr/PulsrTheme.h"
 #include "util/StringUtils.h"
 
@@ -84,6 +85,11 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
     case CrossPointSettings::UI_THEME::PULSR:
       LOG_DBG("UI", "Using PULSR theme");
       currentTheme = std::make_unique<PulsrTheme>();
+      currentMetrics = &PulsrMetrics::values;
+      break;
+    case CrossPointSettings::UI_THEME::DARK_PULSR:
+      LOG_DBG("UI", "Using PULSR Dark theme");
+      currentTheme = std::make_unique<DarkPulsrTheme>();
       currentMetrics = &PulsrMetrics::values;
       break;
   }
