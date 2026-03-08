@@ -80,8 +80,18 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
   const int H = renderer.getScreenHeight();
 
   // ── 1. Left bar (full height, outer corners rounded on the left side) ──────
-  renderer.fillRoundedRect(0, 0, LEFT_W, H, OUT_R,
-                           /*tl=*/true, /*tr=*/false, /*bl=*/true, /*br=*/false, col(col(Color::Black)));
+  // In dark mode, pre-fill the left column black so the white bar's rounded
+  // corner cutouts are visible against a black background (mirrors how the light
+  // theme shows black curves against the white screen background).
+  // In dark mode the corner radius is capped at TOP_H so the arc fits entirely
+  // within the top/bottom bar zones — prevents the curve from visually bleeding
+  // into the content area and looking like "bars sticking into the curves".
+  if (inverted_) {
+    renderer.fillRect(0, 0, LEFT_W, H, /*black=*/true);
+  }
+  const int cornerR = inverted_ ? std::min(OUT_R, TOP_H) : OUT_R;
+  renderer.fillRoundedRect(0, 0, LEFT_W, H, cornerR,
+                           /*tl=*/true, /*tr=*/false, /*bl=*/true, /*br=*/false, col(Color::Black));
 
   // ── 2. Top bar strip ────────────────────────────────────────────────────────
   renderer.fillRect(LEFT_W, 0, W - LEFT_W, TOP_H, b(true));
@@ -104,7 +114,12 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
   renderer.fillRect(LEFT_W, H - TOP_H, W - LEFT_W, TOP_H, b(true));
 
   // ── 3b. Content area fill (dark theme only — light theme leaves it white from clearScreen) ──
-  renderer.fillRect(LEFT_W, TOP_H, W - LEFT_W, H - TOP_H * 2, b(false));
+  // ── 3b. Content area fill (dark theme only) ─────────────────────────────────
+  // Light theme: content is already white from clearScreen; do not fill here
+  // as it would overwrite any restored cover buffer.
+  if (inverted_) {
+    renderer.fillRect(LEFT_W, TOP_H, W - LEFT_W, H - TOP_H * 2, /*black=*/true);
+  }
 
   // ── 4-7. Left-bar segments — align with physical buttons (PWR / UP / DOWN / BATT)
   //
@@ -148,7 +163,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       int pillY = seg0Top + SEG_MARGIN;
 
       // PWR pill — always shown, grey background, black "PWR" label
-      renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, col(col(Color::LightGray)));
+      renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, col(Color::LightGray));
       {
         const char* lbl = "PWR";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
@@ -159,7 +174,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
 
       // WIFI pill — pulsing while DZ is attempting auto-connect on boot
       if (UITheme::isWifiAutoConnecting()) {
-        const Color wifiColor = (millis() / 500) % 2 == 0 ? col(col(Color::White)) : col(col(Color::DarkGray));
+        const Color wifiColor = (millis() / 500) % 2 == 0 ? col(Color::White) : col(Color::DarkGray);
         renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, wifiColor);
         const char* lbl = "WIFI";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
@@ -171,8 +186,8 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       // HTTP pill — only when web server is active
       if (UITheme::isHttpServerActive()) {
         const Color httpColor = UITheme::isNetworkTransferring()
-                                    ? ((millis() / 600) % 2 == 0 ? col(col(Color::White)) : col(col(Color::LightGray)))
-                                    : col(col(Color::LightGray));
+                                    ? ((millis() / 600) % 2 == 0 ? col(Color::White) : col(Color::LightGray))
+                                    : col(Color::LightGray);
         renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
         const char* lbl = "HTTP";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
@@ -184,28 +199,28 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       // FEED pill — colour + label reflect sync state; falls back to DZ pill when idle
       {
         const auto feedState = RssFeedSync::getState();
-        Color feedColor = col(col(Color::Black));  // invisible (IDLE/DONE)
+        Color feedColor = col(Color::Black);  // invisible (IDLE/DONE)
         bool showPill = false;
         const char* pillLabel = nullptr;
         switch (feedState) {
           case RssFeedSync::State::FETCHING:
-            feedColor = col(col(Color::LightGray));
+            feedColor = col(Color::LightGray);
             showPill = true;
             break;
           case RssFeedSync::State::PARSING:
-            feedColor = ((millis() / 500) % 2 == 0 ? col(col(Color::LightGray)) : col(col(Color::DarkGray)));
+            feedColor = ((millis() / 500) % 2 == 0 ? col(Color::LightGray) : col(Color::DarkGray));
             showPill = true;
             break;
           case RssFeedSync::State::DOWNLOADING:
-            feedColor = ((millis() / 400) % 2 == 0 ? col(col(Color::White)) : col(col(Color::LightGray)));
+            feedColor = ((millis() / 400) % 2 == 0 ? col(Color::White) : col(Color::LightGray));
             showPill = true;
             break;
           case RssFeedSync::State::ERROR:
-            feedColor = col(col(Color::White));
+            feedColor = col(Color::White);
             showPill = true;
             break;
           case RssFeedSync::State::DONE:
-            feedColor = col(col(Color::LightGray));
+            feedColor = col(Color::LightGray);
             showPill = true;
             break;
           default:
@@ -216,7 +231,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         } else if (SETTINGS.dangerZoneEnabled) {
           // Show "DZ" warning pill when Danger Zone is active and feed is idle
           showPill = true;
-          feedColor = ((millis() / 800) % 2 == 0 ? col(col(Color::White)) : col(col(Color::DarkGray)));
+          feedColor = ((millis() / 800) % 2 == 0 ? col(Color::White) : col(Color::DarkGray));
           pillLabel = "DZON";
         }
         if (showPill && pillLabel) {
@@ -509,10 +524,10 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const int itemY = cr.y + (i % pageItems) * rowH;
     const bool isSel = (i == selectedIndex);
 
-    // Selection highlight: light-gray row fill flush to content edge
-    // (no separate left indicator bar — the PULSR left bar already provides that anchor)
+    // Selection highlight: always LightGray fill so text-on-highlight is always black.
+    // Rule: light background → black text, regardless of theme inversion.
     if (isSel) {
-      renderer.fillRectDither(cr.x, itemY, contentW, rowH, col(Color::LightGray));
+      renderer.fillRectDither(cr.x, itemY, contentW, rowH, Color::LightGray);
     }
 
     // Row separator (thin line at bottom of row)
@@ -537,7 +552,9 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
         iconW = ICON_SZ + LIST_PAD_X;
         const int iconX = cr.x + SEL_BAR_W + LIST_PAD_X;
         const int iconY2 = itemY + (rowH - ICON_SZ) / 2;
-        if (inverted_) {
+        // Selected row has light (LightGray) background — always draw icon in black.
+        // Non-selected row: invert icon for dark theme.
+        if (inverted_ && !isSel) {
           renderer.drawIconInverted(bmp, iconX, iconY2, ICON_SZ, ICON_SZ);
         } else {
           renderer.drawIcon(bmp, iconX, iconY2, ICON_SZ, ICON_SZ);
@@ -546,18 +563,20 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     }
 
     // Title text (offset right if icon present)
+    // Selected row has light (LightGray) bg → always black text.
+    // Non-selected: follow theme (black in light, white in dark).
     const int titleX = cr.x + SEL_BAR_W + LIST_PAD_X + iconW;
     const int titleMaxW = contentW - SEL_BAR_W - LIST_PAD_X * 2 - valueW - iconW;
     const int titleH = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int titleY = rowSubtitle != nullptr ? itemY + 5 : itemY + (rowH - titleH) / 2;
 
     const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, rowTitle(i).c_str(), titleMaxW);
-    renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), b(true));
+    renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), isSel ? true : b(true));
 
     // Subtitle text
     if (rowSubtitle != nullptr) {
       const auto sub = renderer.truncatedText(SMALL_FONT_ID, rowSubtitle(i).c_str(), titleMaxW);
-      renderer.drawText(SMALL_FONT_ID, titleX, itemY + titleH + 8, sub.c_str(), b(true));
+      renderer.drawText(SMALL_FONT_ID, titleX, itemY + titleH + 8, sub.c_str(), isSel ? true : b(true));
     }
 
     // Value text (draw right-aligned)
@@ -565,11 +584,12 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
       const int vx = cr.x + contentW - renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) - LIST_PAD_X;
       const int vy = itemY + (rowH - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2;
       if (isSel && highlightValue) {
+        // Value highlight box: DarkGray fill with white text for contrast on the LightGray row.
         const int boxW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X * 2;
-        renderer.fillRect(vx - LIST_PAD_X, itemY, boxW, rowH, b(true));
-        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), b(false));
+        renderer.fillRectDither(vx - LIST_PAD_X, itemY, boxW, rowH, Color::DarkGray);
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), false);  // white text on DarkGray
       } else {
-        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), b(true));
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), isSel ? true : b(true));
       }
     }
   }

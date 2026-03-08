@@ -26,6 +26,7 @@ enum class SettingAction {
   CheckForClawUpdates,
   Language,
   DangerZonePassword,
+  ScreenshotTour,
 };
 
 struct SettingInfo {

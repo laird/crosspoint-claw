@@ -24,6 +24,7 @@ enum class SettingAction {
   Language,
   FeedSync,
   DangerZonePassword,
+  ScreenshotTour,
 };
 
 struct SettingInfo {
@@ -167,6 +168,7 @@ class SettingsActivity final : public Activity {
 
   void enterCategory(int categoryIndex);
   void toggleCurrentSetting();
+  void rebuildSystemSettings();
 
  public:
   explicit SettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

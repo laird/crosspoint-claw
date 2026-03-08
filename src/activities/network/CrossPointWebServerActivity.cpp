@@ -85,11 +85,15 @@ void CrossPointWebServerActivity::onExit() {
 
   state = WebServerActivityState::SHUTTING_DOWN;
 
-  // Stop the web server first (before disconnecting WiFi)
-  stopWebServer();
-
-  // Stop mDNS
+  // Stop mDNS FIRST — must complete async teardown before stopping web server.
+  // If mDNS teardown runs after stopWebServer(), it tries to send packets
+  // through a dead lwIP socket context, causing a crash in mdns_free().
+  LOG_DBG("WEBACT", "Stopping mDNS...");
   MDNS.end();
+  delay(100);  // Allow mDNS async teardown to complete in lwIP stack
+
+  // Stop the web server (after mDNS has fully torn down)
+  stopWebServer();
 
   // Stop DNS server if running (AP mode)
   if (dnsServer) {
@@ -99,7 +103,7 @@ void CrossPointWebServerActivity::onExit() {
     dnsServer = nullptr;
   }
 
-  // Brief wait for LWIP stack to flush pending packets
+  // Brief wait for LWIP stack to flush remaining packets
   delay(50);
 
   // Disconnect WiFi gracefully

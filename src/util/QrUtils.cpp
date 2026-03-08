@@ -39,6 +39,11 @@ void QrUtils::drawQrCode(const GfxRenderer& renderer, const Rect& bounds, const 
     const int xOff = bounds.x + (bounds.width - qrDisplaySize) / 2;
     const int yOff = bounds.y + (bounds.height - qrDisplaySize) / 2;
 
+    // Draw white background so QR is always visible (dark theme renders black on black otherwise)
+    const int quietZone = px * 2;
+    renderer.fillRect(xOff - quietZone, yOff - quietZone,
+                      qrDisplaySize + quietZone * 2, qrDisplaySize + quietZone * 2, false);
+
     // Draw the QR Code
     for (uint8_t cy = 0; cy < qrcode.size; cy++) {
       for (uint8_t cx = 0; cx < qrcode.size; cx++) {

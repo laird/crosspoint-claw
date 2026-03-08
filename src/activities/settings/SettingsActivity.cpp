@@ -22,6 +22,43 @@
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
                                                               StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM};
 
+void SettingsActivity::rebuildSystemSettings() {
+  // The range [WiFi Networks..DZ Password+ScreenshotTour] is device-only and rebuilt on DZ toggle.
+  // Keep this in sync with onEnter() if any system items are added/removed.
+  const size_t fixedCount = systemSettings.size();
+  // Trim any previously-appended device-only entries (added by this function)
+  // They follow the items loaded from getSettingsList() — we reload from scratch.
+  systemSettings.clear();
+  for (const auto& setting : getSettingsList()) {
+    if (setting.category == StrId::STR_CAT_SYSTEM) {
+      systemSettings.push_back(setting);
+    }
+  }
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
+  systemSettings.push_back(SettingInfo::DynamicString(
+                               StrId::STR_WIFI_NETWORK,
+                               [] {
+                                 return WIFI_STORE.getLastConnectedSsid().empty() ? std::string("(none)")
+                                                                                  : WIFI_STORE.getLastConnectedSsid();
+                               },
+                               [](const std::string&) {})
+                               .withDeviceOnly());
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_CLAW_UPDATES, SettingAction::CheckForClawUpdates));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
+  // Danger Zone: toggle + password entry (device-only)
+  systemSettings.push_back(SettingInfo::Toggle(StrId::STR_DANGER_ZONE, &CrossPointSettings::dangerZoneEnabled, nullptr,
+                                               StrId::STR_CAT_SYSTEM));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_DANGER_ZONE_PASSWORD, SettingAction::DangerZonePassword));
+  // Screenshot tour: only visible when Danger Zone is enabled
+  if (SETTINGS.dangerZoneEnabled) {
+    systemSettings.push_back(SettingInfo::Action(StrId::STR_SCREENSHOT_TOUR, SettingAction::ScreenshotTour));
+  }
+}
+
 void SettingsActivity::onEnter() {
   Activity::onEnter();
 
@@ -48,26 +85,7 @@ void SettingsActivity::onEnter() {
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
-  systemSettings.push_back(SettingInfo::DynamicString(
-                               StrId::STR_WIFI_NETWORK,
-                               [] {
-                                 return WIFI_STORE.getLastConnectedSsid().empty() ? std::string("(none)")
-                                                                                  : WIFI_STORE.getLastConnectedSsid();
-                               },
-                               [](const std::string&) {})
-                               .withDeviceOnly());
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_BROWSER, SettingAction::OPDSBrowser));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_CLAW_UPDATES, SettingAction::CheckForClawUpdates));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
-
-  // Danger Zone: toggle + password entry (device-only)
-  systemSettings.push_back(SettingInfo::Toggle(StrId::STR_DANGER_ZONE, &CrossPointSettings::dangerZoneEnabled, nullptr,
-                                               StrId::STR_CAT_SYSTEM));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_DANGER_ZONE_PASSWORD, SettingAction::DangerZonePassword));
+  rebuildSystemSettings();
   readerSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
 
   // Reset selection to first category
@@ -181,6 +199,11 @@ void SettingsActivity::toggleCurrentSetting() {
     // Toggle the boolean value using the member pointer
     const bool currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = !currentValue;
+    // Rebuild system settings when DZ toggle changes (screenshot tour visibility depends on DZ)
+    if (setting.valuePtr == &CrossPointSettings::dangerZoneEnabled) {
+      rebuildSystemSettings();
+      settingsCount = static_cast<int>(currentSettings->size());
+    }
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
@@ -237,6 +260,11 @@ void SettingsActivity::toggleCurrentSetting() {
               }
             });
         break;
+      case SettingAction::ScreenshotTour: {
+        extern volatile bool dzScreenshotTourRequested;
+        dzScreenshotTourRequested = true;
+        break;
+      }
       case SettingAction::None:
         // Do nothing
         break;
