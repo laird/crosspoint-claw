@@ -143,7 +143,7 @@ void OpdsBookBrowserActivity::render(RenderLock&&) {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_OPDS_BROWSER));
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, "OPDS");
 
   if (state == BrowserState::CHECK_WIFI) {
     renderer.drawCenteredText(PULSR_10_FONT_ID, pageHeight / 2, statusMessage.c_str());
