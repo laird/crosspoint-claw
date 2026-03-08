@@ -90,7 +90,9 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
   if (inverted_) {
     renderer.fillRect(0, 0, LEFT_W, H, /*black=*/true);
   }
-  const int cornerR = inverted_ ? std::min(OUT_R, TOP_H) : OUT_R;
+  // Cap corner radius at TOP_H in both light and dark modes so the arc fits
+  // entirely within the top/bottom bar zones and doesn't bleed into the content area.
+  const int cornerR = std::min(OUT_R, TOP_H);
   renderer.fillRoundedRect(0, 0, LEFT_W, H, cornerR,
                            /*tl=*/true, /*tr=*/false, /*bl=*/true, /*br=*/false, col(Color::Black));
 
