@@ -984,6 +984,10 @@ curl -s "http://192.168.0.234/api/status" | jq .version
 - **Reader does not auto-connect** to WiFi on boot until Danger Zone is enabled + password set
 - **`/api/feed/sync`, `/api/flash`, `/api/reboot`** are all Danger Zone endpoints (require `X-Danger-Zone-Password` header)
 - **Multiple flashes in one session**: each build produces a new `firmware.bin`; always verify SHA after upload before triggering flash
+- **SD-card OTA skips same-version firmware**: `setup()` compares firmware.bin version string to running version; if identical it deletes the file and skips flashing. Always bump `version` in `platformio.ini` between iterative flashes, or use the GitHub OTA/DZ flash endpoint instead.
+- **Icon bitmaps must match the rendered size exactly**: `pulsrListIcon()` returns icons for `drawIcon(bmp, x, y, 24, 24)` — the renderer treats the bitmap as having `ceil(width/8)` bytes per row. A 32×32 bitmap (4 bytes/row) rendered at 24×24 (3 bytes/row) causes every row to be shifted by 1 byte, producing garbled output. All icons referenced from `pulsrListIcon()` MUST be 24×24 (72 bytes total). The 24px icons live in `src/components/icons/` alongside the 32px ones — use the correct size.
+- **Screen title strings**: Use the correct `StrId` constant for each screen's `GUI.drawHeader()` call. Copy-paste bugs (e.g., reusing `STR_FILE_TRANSFER` in `NetworkModeSelectionActivity`) are silent — always verify the enum name matches the screen. For screen-title-only strings with no natural I18n match, a raw string literal is acceptable (PULSR theme uppercases it anyway).
+- **Screenshot tour disconnects WiFi**: the tour API endpoint (`POST /api/screenshot-tour`) sets `WiFi.mode(WIFI_OFF)` before capturing. After the tour, `dangerZoneAutoConnect()` is called — but only reconnects if DZ is enabled with a password. If DZ is off, WiFi stays down. A separate `reconnectWifiAfterTour()` helper was added to `main.cpp` that reconnects using saved credentials regardless of DZ state; both the API path and the button-combo path call it.
 
 ### Danger Zone Setup (one-time on device)
 1. Settings → SYST tab → toggle **Danger Zone** ON
