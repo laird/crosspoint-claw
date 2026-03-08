@@ -230,8 +230,14 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
           pillLabel = RssFeedSync::getStatusLabel();
         } else if (SETTINGS.dangerZoneEnabled) {
           // Show "DZ" warning pill when Danger Zone is active and feed is idle
+          // In dark mode, use solid black+white border for better contrast (no dithering)
+          // In light mode, pulse between white and dark-gray as before
           showPill = true;
-          feedColor = ((millis() / 800) % 2 == 0 ? col(Color::White) : col(Color::DarkGray));
+          if (inverted_) {
+            feedColor = Color::Black;  // Solid black in dark mode (no pulsing, no dither)
+          } else {
+            feedColor = ((millis() / 800) % 2 == 0 ? col(Color::White) : col(Color::DarkGray));
+          }
           pillLabel = "DZON";
         }
         if (showPill && pillLabel) {
@@ -258,8 +264,10 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
             renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
             const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, pillLabel);
             const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
+            // DZON pill in dark mode uses solid black bg → white text; in light mode: mostly white → black text
+            bool textBlack = !(inverted_ && feedColor == Color::Black);
             renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, pillLabel,
-                              true);  // pill: always black text on light background
+                              textBlack);
           }
         }
       }
@@ -524,10 +532,16 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const int itemY = cr.y + (i % pageItems) * rowH;
     const bool isSel = (i == selectedIndex);
 
-    // Selection highlight: always LightGray fill so text-on-highlight is always black.
+    // Selection highlight: solid white in dark mode (no dithering), LightGray in light mode
     // Rule: light background → black text, regardless of theme inversion.
     if (isSel) {
-      renderer.fillRectDither(cr.x, itemY, contentW, rowH, Color::LightGray);
+      Color selColor = inverted_ ? Color::White : Color::LightGray;
+      // Use solid fill in dark mode (dither makes e-ink look noisy); use dither for light mode
+      if (inverted_) {
+        renderer.fillRect(cr.x, itemY, contentW, rowH, selColor);
+      } else {
+        renderer.fillRectDither(cr.x, itemY, contentW, rowH, selColor);
+      }
     }
 
     // Row separator (thin line at bottom of row)
@@ -858,12 +872,22 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
     const bool isSel = (i == selectorIndex);
 
     if (isSel) {
-      // Fill the full row width with grey — the PULSR left bar is already black
-      // so no separate selection indicator is needed and the left edge stays flush.
-      renderer.fillRectDither(cr.x, rowY, cr.width, topInset, col(Color::LightGray));
-      renderer.fillRectDither(cr.x, coverEndY, cr.width, topInset, col(Color::LightGray));
-      renderer.fillRectDither(cr.x, coverStartY, thumbX - cr.x, coverH, col(Color::LightGray));
-      renderer.fillRectDither(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, col(Color::LightGray));
+      // Fill the full row width with solid white in dark mode (no dithering).
+      // Dithered fills look noisy on e-ink when the color becomes gray in dark mode.
+      Color selColor = col(Color::LightGray);
+      if (inverted_) {
+        // Solid fill in dark mode (white)
+        renderer.fillRect(cr.x, rowY, cr.width, topInset, selColor);
+        renderer.fillRect(cr.x, coverEndY, cr.width, topInset, selColor);
+        renderer.fillRect(cr.x, coverStartY, thumbX - cr.x, coverH, selColor);
+        renderer.fillRect(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, selColor);
+      } else {
+        // Dithered fill in light mode (matches original behavior)
+        renderer.fillRectDither(cr.x, rowY, cr.width, topInset, selColor);
+        renderer.fillRectDither(cr.x, coverEndY, cr.width, topInset, selColor);
+        renderer.fillRectDither(cr.x, coverStartY, thumbX - cr.x, coverH, selColor);
+        renderer.fillRectDither(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, selColor);
+      }
     }
 
     // Title + author in the text column (right of cover)
