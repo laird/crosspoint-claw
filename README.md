@@ -167,24 +167,9 @@ You need a USB-C cable and Chrome or Edge browser.
 
 That's it. The flasher handles everything. After this, all future updates happen wirelessly — no USB or browser needed again.
 
-### Step 2 — Enable Danger Zone on the device
+### Step 2 — Start a feed server
 
-On the device:
-1. Settings → SYST tab → toggle **Danger Zone** ON
-2. Tap **Danger Zone Password** → set a password
-3. Reboot
-
-After reboot, the device auto-connects to WiFi. The web API is now live — OpenClaw can push content and firmware updates wirelessly from here on.
-
-### Step 3 — Point OpenClaw at the reader
-
-Give your OpenClaw instance this prompt:
-
-> You are managing a CrossPoint e-ink reader. Read the README at `/home/laird/src/crosspoint-claw/README.md` (or `https://github.com/laird/crosspoint-claw`) — specifically the **AI Agent Operations** section — for the full reference on pushing books, news, and firmware. The reader is at `192.168.0.234` (or your reader's IP). Danger Zone password is `1814` (or whatever you set).
-
-OpenClaw will read the README and know exactly what to do: push EPUBs, sync articles, deliver news digests, and optionally push firmware updates — all over WiFi, on a schedule, automatically.
-
-### Step 4 — Start a feed server (optional, for scheduled content)
+The feed server is where OpenClaw drops content. The reader pulls from it automatically on every WiFi connect — no persistent agent access needed.
 
 ```bash
 # Minimal feed server (Python)
@@ -192,9 +177,37 @@ cd /path/to/your/feed/content
 python3 -m http.server 8090
 ```
 
-See `docs/rss-content-feeds.md` for the full feed format spec and `scripts/crosspoint-feed-server.py` for a production-ready feed server with directory auto-scanning.
+See `scripts/crosspoint-feed-server.py` for a production-ready feed server that auto-scans directories. See `docs/rss-content-feeds.md` for the feed format spec.
 
-Configure the feed URL on the device: Settings → NETW → Feed URL → `http://192.168.x.x:8090/feed.xml`
+### Step 3 — Enable Danger Zone briefly to configure the reader
+
+Danger Zone (DZ) opens the reader's web API. You only need it temporarily to set the feed URL, then you can turn it off.
+
+On the device:
+1. Settings → SYST tab → toggle **Danger Zone** ON
+2. Tap **Danger Zone Password** → set a password
+3. Reboot — device auto-connects to WiFi with the API live
+
+Then give OpenClaw this prompt to finish setup:
+
+> You are setting up a CrossPoint e-ink reader. Read the README at `https://github.com/laird/crosspoint-claw` — specifically the **AI Agent Operations** section. The reader is at `<reader IP>`. DZ password is `<your password>`. Set the feed URL to `http://<feed server IP>:8090/feed.xml` via the settings API, then confirm it's working.
+
+Once the feed URL is set, **turn Danger Zone off** on the device. The reader will now pull content from the feed on every WiFi connect automatically — no agent access or DZ needed for day-to-day use.
+
+### Step 4 — Point OpenClaw at the feed server
+
+With DZ off, OpenClaw delivers content by dropping files into the feed server directory:
+
+```
+feed-server/
+├── books/chip/      ← AI-written stories and EPUBs
+├── books/erotic/    ← AO3 downloads
+├── thought/         ← Articles and essays
+├── news/            ← Daily briefings (JSON)
+└── sleep/           ← Sleep screen art (BMP)
+```
+
+The reader syncs on the next WiFi connect. For on-demand direct pushes ("put this book on my reader right now"), re-enable DZ temporarily.
 
 ---
 
