@@ -171,17 +171,15 @@ That's it. The flasher handles everything. After this, all future updates happen
 
 Settings → NETW → WiFi → select your network and enter password.
 
-The reader's IP address is shown in the top bar once connected (e.g. `192.168.0.234`).
-
 ### Step 3 — Point OpenClaw at the reader
 
-No Danger Zone needed. OpenClaw can push books, articles, and other content directly over WiFi without any special settings. Give it this prompt:
+No IP address needed — the reader is available at **`crosspoint.local`** on your local network (mDNS). Give OpenClaw this prompt:
 
-> You are managing a CrossPoint e-ink reader. Read the README at `https://github.com/laird/crosspoint-claw` — specifically the **AI Agent Operations** section. The reader is at `<reader IP>` (shown in the top bar on the device).
+> You are managing a CrossPoint e-ink reader at `http://crosspoint.local`. Read the README at `https://github.com/laird/crosspoint-claw` — specifically the **AI Agent Operations** section — and start delivering content.
 
-OpenClaw will push content directly to the reader via its open HTTP API. No feed server required, no Danger Zone required.
+That's it. No Danger Zone, no feed server, no IP address hunting. OpenClaw pushes books, articles, and news directly to `crosspoint.local` via open HTTP API.
 
-**Danger Zone** is only needed for destructive operations: reboot, firmware flash, OTA update, and screenshot tour. For day-to-day content delivery it stays off.
+**Danger Zone** is only needed for destructive operations: reboot, firmware flash, OTA update, and screenshot tour. Leave it off for normal use.
 
 ---
 
