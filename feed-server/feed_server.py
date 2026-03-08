@@ -148,10 +148,26 @@ def build_feed(content_dir: Path, feed_url: str, feed_title: str) -> str:
 </rss>"""
 
 
-def make_handler(content_dir, feed_url, feed_title, access_log):
+def make_handler(content_dir, feed_url, feed_title, access_log, reader_feed_file=None):
     class FeedHandler(BaseHTTPRequestHandler):
         def do_GET(self):
-            if self.path == "/feed.xml":
+            if self.path == "/reader-feed.xml" and reader_feed_file:
+                # Proxy an external news/reader feed so the ESP32 can fetch it
+                # over HTTP/1.1 (python3 -m http.server only does HTTP/1.0)
+                p = Path(reader_feed_file)
+                if p.exists():
+                    body = p.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/rss+xml; charset=utf-8")
+                    self.send_header("Content-Length", len(body))
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+                return
+
+            elif self.path == "/feed.xml":
                 body = build_feed(content_dir, feed_url, feed_title).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/rss+xml; charset=utf-8")
@@ -203,6 +219,9 @@ def main():
                         help="Public base URL (auto-detected from --host/--port if omitted)")
     parser.add_argument("--feed-title", default=DEFAULT_FEED_TITLE)
     parser.add_argument("--access-log", default=None, help="Optional path for access log")
+    parser.add_argument("--reader-feed", default=os.environ.get("CROSSPOINT_READER_FEED"),
+                        help="Path to an external reader/news feed XML to proxy at /reader-feed.xml "
+                             "(also settable via CROSSPOINT_READER_FEED env var)")
     args = parser.parse_args()
 
     content_dir = args.content_dir.resolve()
@@ -212,8 +231,11 @@ def main():
     print(f"  Content dir : {content_dir}")
     print(f"  Feed URL    : {feed_url}/feed.xml")
     print(f"  Listening   : {args.host}:{args.port}")
+    if args.reader_feed:
+        print(f"  Reader feed : {args.reader_feed} → /reader-feed.xml")
 
-    handler = make_handler(content_dir, feed_url, args.feed_title, args.access_log)
+    handler = make_handler(content_dir, feed_url, args.feed_title, args.access_log,
+                           reader_feed_file=args.reader_feed)
     HTTPServer((args.host, args.port), handler).serve_forever()
 
 
