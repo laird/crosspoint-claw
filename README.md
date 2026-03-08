@@ -141,34 +141,50 @@ Reader (you)
 
 ---
 
-## Setup
+## Getting Started
 
-### 1. Flash CrossPoint OpenClaw firmware (first time — human step)
+There are two paths depending on what you want to do:
 
-This is a one-time browser-based step. You need a USB-C cable and a Chrome/Edge browser.
+| Goal | Path |
+|------|------|
+| Get a reader receiving AI-curated content | **Loop 1: Reader Setup** (below) |
+| Build or modify the firmware itself | **Loop 2: Firmware Dev** (see [Development](#development)) |
 
-1. Download the latest firmware `.bin` from the [Releases page](https://github.com/laird/crosspoint-claw/releases)
+Most people only ever need Loop 1.
+
+---
+
+## Loop 1: Reader Setup + OpenClaw Content Delivery
+
+### Step 1 — Flash the firmware (one-time, human step)
+
+You need a USB-C cable and Chrome or Edge browser.
+
+1. Download the latest `.bin` from the [Releases page](https://github.com/laird/crosspoint-claw/releases)
 2. Open the web flasher: **https://xteink.dve.al/**
 3. Click **Connect** → select the reader's USB serial port
-4. Upload the `.bin` file and click **Flash**
-5. The flasher handles partitions, OTA metadata, and verification automatically
+4. Upload the `.bin` and click **Flash**
 
-After this one-time flash, all future firmware updates can be done wirelessly (OTA) — no USB or browser needed. An AI agent (OpenClaw/Chip) can push firmware updates over WiFi automatically.
+That's it. The flasher handles everything. After this, all future updates happen wirelessly — no USB or browser needed again.
 
-> **Note for OpenClaw agents**: If the reader already has CrossPoint OpenClaw firmware installed and Danger Zone is enabled, skip this step entirely. Use the OTA flash instructions in the [AI Agent Operations](#ai-agent-operations-openclaw--chip) section instead.
-
-Use the web flasher at https://xteink.dve.al/ with a firmware build from this fork, or follow the USB flash instructions in [Development — Safe Flash](#safe-usb-flash).
-
-### 2. Enable Danger Zone
+### Step 2 — Enable Danger Zone on the device
 
 On the device:
 1. Settings → SYST tab → toggle **Danger Zone** ON
 2. Tap **Danger Zone Password** → set a password
 3. Reboot
 
-After reboot, the device auto-connects to WiFi and shows the QR code screen.
+After reboot, the device auto-connects to WiFi. The web API is now live — OpenClaw can push content and firmware updates wirelessly from here on.
 
-### 3. Start a feed server
+### Step 3 — Point OpenClaw at the reader
+
+Give your OpenClaw instance this prompt:
+
+> You are managing a CrossPoint e-ink reader. Read the README at `/home/laird/src/crosspoint-claw/README.md` (or `https://github.com/laird/crosspoint-claw`) — specifically the **AI Agent Operations** section — for the full reference on pushing books, news, and firmware. The reader is at `192.168.0.234` (or your reader's IP). Danger Zone password is `1814` (or whatever you set).
+
+OpenClaw will read the README and know exactly what to do: push EPUBs, sync articles, deliver news digests, and optionally push firmware updates — all over WiFi, on a schedule, automatically.
+
+### Step 4 — Start a feed server (optional, for scheduled content)
 
 ```bash
 # Minimal feed server (Python)
@@ -178,9 +194,13 @@ python3 -m http.server 8090
 
 See `docs/rss-content-feeds.md` for the full feed format spec and `scripts/crosspoint-feed-server.py` for a production-ready feed server with directory auto-scanning.
 
-### 4. Configure the feed URL on the device
+Configure the feed URL on the device: Settings → NETW → Feed URL → `http://192.168.x.x:8090/feed.xml`
 
-Settings → NETW → Feed URL → `http://192.168.x.x:8090/feed.xml`
+---
+
+## Loop 2: Firmware Development
+
+See [Development](#development) below. This requires PlatformIO, the source repo, and comfort with embedded C++. OpenClaw can assist with the build → flash → verify cycle once you're set up, but the initial dev environment is a human setup step.
 
 ---
 
