@@ -1,6 +1,7 @@
 #include "PulsrTheme.h"
 
 #include <Bitmap.h>
+#include <HalGPIO.h>
 
 extern "C" const char* getVersionString();
 #include <GfxRenderer.h>
@@ -162,17 +163,18 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
 
       int pillY = seg0Top + SEG_MARGIN;
 
-      // In dark mode, pills use solid white background so they're clearly visible against the
-      // black sidebar and text stays readable. Light mode keeps the original LightGray fill.
-      const Color pillBg = inverted_ ? Color::White : Color::LightGray;
+      // Pills use solid fills only (no gray dithering on e-ink).
+      // Light mode: black pill + white text. Dark mode: white pill + black text.
+      const Color pillBg = inverted_ ? Color::White : Color::Black;
+      const bool pillTextBlack = inverted_;  // black text on white (dark mode), white text on black (light mode)
 
-      // PWR pill — always shown, grey background, black "PWR" label
+      // PWR pill — always shown
       renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, pillBg);
       {
         const char* lbl = "PWR";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, true);  // pill: always black text on light background
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, pillTextBlack);
       }
       pillY += pillH + PILL_GAP;
 
@@ -202,7 +204,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
         const char* lbl = "HTTP";
         const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, lbl);
         const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, true);  // pill: always black text on light background
+        renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, lbl, httpColor != Color::White ? false : true);
       }
       pillY += pillH + PILL_GAP;
 
@@ -220,11 +222,12 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
             showPill = true;
             break;
           case RssFeedSync::State::PARSING:
-            feedColor = (millis() / 500) % 2 == 0 ? pillBg : (inverted_ ? Color::Black : Color::DarkGray);
+            // Pulse between pillBg and opposite solid color (no gray/dithering)
+            feedColor = (millis() / 500) % 2 == 0 ? pillBg : (inverted_ ? Color::Black : Color::White);
             showPill = true;
             break;
           case RssFeedSync::State::DOWNLOADING:
-            feedColor = (millis() / 400) % 2 == 0 ? Color::White : pillBg;
+            feedColor = (millis() / 400) % 2 == 0 ? (inverted_ ? Color::White : Color::Black) : pillBg;
             showPill = true;
             break;
           case RssFeedSync::State::ERROR:
@@ -245,11 +248,8 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
           // In dark mode, use solid black+white border for better contrast (no dithering)
           // In light mode, pulse between white and dark-gray as before
           showPill = true;
-          if (inverted_) {
-            feedColor = Color::Black;  // Solid black in dark mode (no pulsing, no dither)
-          } else {
-            feedColor = ((millis() / 800) % 2 == 0 ? col(Color::White) : col(Color::DarkGray));
-          }
+          // Pulse between pillBg and its opposite — solid fills only, no gray dithering
+          feedColor = ((millis() / 800) % 2 == 0 ? pillBg : (inverted_ ? Color::Black : Color::White));
           pillLabel = "DZON";
         }
         if (showPill && pillLabel) {
@@ -257,10 +257,13 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
             // Progress bar pill: light-gray background, dark-gray fill, "N/total" counter
             int dlCurrent = 0, dlTotal = 0;
             RssFeedSync::getProgress(dlCurrent, dlTotal);
-            renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, col(Color::LightGray));
+            // Progress bar: outline (pillBg) + solid fill (opposite), no gray dithering
+            const Color progressBg = pillBg;
+            const Color progressFill = inverted_ ? Color::Black : Color::White;
+            renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, progressBg);
             if (dlTotal > 0 && dlCurrent > 0) {
               const int fillW = std::max(PILL_R * 2, (dlCurrent * pillW) / dlTotal);
-              renderer.fillRoundedRect(pillX, pillY, std::min(fillW, pillW), pillH, PILL_R, col(Color::DarkGray));
+              renderer.fillRoundedRect(pillX, pillY, std::min(fillW, pillW), pillH, PILL_R, progressFill);
             }
             char countBuf[10];
             if (dlTotal > 0) {
@@ -271,15 +274,15 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
             const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, countBuf);
             const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
             renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, countBuf,
-                              true);  // pill: always black text on light background
+                              pillTextBlack);
           } else {
             renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, feedColor);
             const int lw = renderer.getTextWidth(PULSR_10_FONT_ID, pillLabel);
             const int lh = renderer.getCapHeight(PULSR_10_FONT_ID);
-            // DZON pill in dark mode uses solid black bg → white text; in light mode: mostly white → black text
-            bool textBlack = !(inverted_ && feedColor == Color::Black);
+            // Text color: white on black fill, black on white fill
+            const bool feedTextBlack = (feedColor == Color::White);
             renderer.drawText(PULSR_10_FONT_ID, pillX + (pillW - lw) / 2, pillY + (pillH - lh) / 2, pillLabel,
-                              textBlack);
+                              feedTextBlack);
           }
         }
       }
@@ -310,7 +313,8 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       }
 
       // CHRG pill — bottom of Seg 2, just above the Seg 2/3 divider
-      const bool usbConnected = (digitalRead(20) == HIGH);
+      extern HalGPIO gpio;  // use debounced state so unplug is detected reliably
+      const bool usbConnected = gpio.isUsbConnected();
       if (usbConnected) {
         const Color chrgBg = inverted_ ? Color::White : Color::LightGray;  // solid white in dark mode
         const int seg2Bottom = zoneTop + segH * 3;  // = seg3 top = seg2/3 divider
@@ -545,16 +549,11 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const int itemY = cr.y + (i % pageItems) * rowH;
     const bool isSel = (i == selectedIndex);
 
-    // Selection highlight: solid white in dark mode (no dithering), LightGray in light mode
-    // Rule: light background → black text, regardless of theme inversion.
+    // Selection highlight: solid fills only (no gray dithering on e-ink).
+    // Dark mode: white bar on black bg. Light mode: black bar on white bg.
     if (isSel) {
-      Color selColor = inverted_ ? Color::White : Color::LightGray;
-      // Use solid fill in dark mode (dither makes e-ink look noisy); use dither for light mode
-      if (inverted_) {
-        renderer.fillRect(cr.x, itemY, contentW, rowH, selColor);
-      } else {
-        renderer.fillRectDither(cr.x, itemY, contentW, rowH, selColor);
-      }
+      const Color selColor = inverted_ ? Color::White : Color::Black;
+      renderer.fillRect(cr.x, itemY, contentW, rowH, selColor);
     }
 
     // Row separator (thin line at bottom of row)
@@ -579,9 +578,11 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
         iconW = ICON_SZ + LIST_PAD_X;
         const int iconX = cr.x + SEL_BAR_W + LIST_PAD_X;
         const int iconY2 = itemY + (rowH - ICON_SZ) / 2;
-        // Selected row has light (LightGray) background — always draw icon in black.
-        // Non-selected row: invert icon for dark theme.
-        if (inverted_ && !isSel) {
+        // Icon color follows text: white icon on black bg, black icon on white bg.
+        // Selected: dark mode = black bg → white icon; light mode = black bg → white icon (inverted)
+        // Non-selected dark: white icon. Non-selected light: black icon.
+        const bool useInvertedIcon = isSel ? !inverted_ : inverted_;
+        if (useInvertedIcon) {
           renderer.drawIconInverted(bmp, iconX, iconY2, ICON_SZ, ICON_SZ);
         } else {
           renderer.drawIcon(bmp, iconX, iconY2, ICON_SZ, ICON_SZ);
@@ -597,13 +598,17 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
     const int titleH = renderer.getTextHeight(PULSR_10_FONT_ID);
     const int titleY = rowSubtitle != nullptr ? itemY + 5 : itemY + (rowH - titleH) / 2;
 
+    // Text on selected row: invert vs background.
+    // Dark mode sel = white bg → black text. Light mode sel = black bg → white text.
+    // Non-selected: follows theme (b(true) = black in light, white in dark).
+    const bool selTextBlack = inverted_;  // dark mode: black text on white sel; light: white text on black sel
     const auto titleTrunc = renderer.truncatedText(PULSR_10_FONT_ID, rowTitle(i).c_str(), titleMaxW);
-    renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), isSel ? true : b(true));
+    renderer.drawText(PULSR_10_FONT_ID, titleX, titleY, titleTrunc.c_str(), isSel ? selTextBlack : b(true));
 
     // Subtitle text
     if (rowSubtitle != nullptr) {
       const auto sub = renderer.truncatedText(SMALL_FONT_ID, rowSubtitle(i).c_str(), titleMaxW);
-      renderer.drawText(SMALL_FONT_ID, titleX, itemY + titleH + 8, sub.c_str(), isSel ? true : b(true));
+      renderer.drawText(SMALL_FONT_ID, titleX, itemY + titleH + 8, sub.c_str(), isSel ? selTextBlack : b(true));
     }
 
     // Value text (draw right-aligned)
@@ -611,12 +616,13 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
       const int vx = cr.x + contentW - renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) - LIST_PAD_X;
       const int vy = itemY + (rowH - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2;
       if (isSel && highlightValue) {
-        // Value highlight box: DarkGray fill with white text for contrast on the LightGray row.
+        // Value highlight box: solid fill matching selection bar; text is opposite.
+        const Color valBg = inverted_ ? Color::White : Color::Black;
         const int boxW = renderer.getTextWidth(PULSR_10_FONT_ID, valueStr.c_str()) + LIST_PAD_X * 2;
-        renderer.fillRectDither(vx - LIST_PAD_X, itemY, boxW, rowH, Color::DarkGray);
-        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), false);  // white text on DarkGray
+        renderer.fillRect(vx - LIST_PAD_X, itemY, boxW, rowH, valBg);
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), selTextBlack);
       } else {
-        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), isSel ? true : b(true));
+        renderer.drawText(PULSR_10_FONT_ID, vx, vy, valueStr.c_str(), isSel ? selTextBlack : b(true));
       }
     }
   }
@@ -889,11 +895,12 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
       // Dithered fills look noisy on e-ink when the color becomes gray in dark mode.
       Color selColor = col(Color::LightGray);
       if (inverted_) {
-        // Solid fill in dark mode (white)
-        renderer.fillRect(cr.x, rowY, cr.width, topInset, selColor);
-        renderer.fillRect(cr.x, coverEndY, cr.width, topInset, selColor);
-        renderer.fillRect(cr.x, coverStartY, thumbX - cr.x, coverH, selColor);
-        renderer.fillRect(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, selColor);
+        // Solid fill in dark mode: use false (white) since fillRect takes bool (true=black, false=white).
+        // col(LightGray) returns DarkGray (0x0A) which casts to true=black — wrong for selection highlight.
+        renderer.fillRect(cr.x, rowY, cr.width, topInset, false);
+        renderer.fillRect(cr.x, coverEndY, cr.width, topInset, false);
+        renderer.fillRect(cr.x, coverStartY, thumbX - cr.x, coverH, false);
+        renderer.fillRect(thumbEndX, rowY, cr.x + cr.width - thumbEndX, rowH, false);
       } else {
         // Dithered fill in light mode (matches original behavior)
         renderer.fillRectDither(cr.x, rowY, cr.width, topInset, selColor);
