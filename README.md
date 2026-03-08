@@ -167,47 +167,21 @@ You need a USB-C cable and Chrome or Edge browser.
 
 That's it. The flasher handles everything. After this, all future updates happen wirelessly — no USB or browser needed again.
 
-### Step 2 — Start a feed server
+### Step 2 — Connect to WiFi on the device
 
-The feed server is where OpenClaw drops content. The reader pulls from it automatically on every WiFi connect — no persistent agent access needed.
+Settings → NETW → WiFi → select your network and enter password.
 
-```bash
-# Minimal feed server (Python)
-cd /path/to/your/feed/content
-python3 -m http.server 8090
-```
+The reader's IP address is shown in the top bar once connected (e.g. `192.168.0.234`).
 
-See `scripts/crosspoint-feed-server.py` for a production-ready feed server that auto-scans directories. See `docs/rss-content-feeds.md` for the feed format spec.
+### Step 3 — Point OpenClaw at the reader
 
-### Step 3 — Enable Danger Zone briefly to configure the reader
+No Danger Zone needed. OpenClaw can push books, articles, and other content directly over WiFi without any special settings. Give it this prompt:
 
-Danger Zone (DZ) opens the reader's web API. You only need it temporarily to set the feed URL, then you can turn it off.
+> You are managing a CrossPoint e-ink reader. Read the README at `https://github.com/laird/crosspoint-claw` — specifically the **AI Agent Operations** section. The reader is at `<reader IP>` (shown in the top bar on the device).
 
-On the device:
-1. Settings → SYST tab → toggle **Danger Zone** ON
-2. Tap **Danger Zone Password** → set a password
-3. Reboot — device auto-connects to WiFi with the API live
+OpenClaw will push content directly to the reader via its open HTTP API. No feed server required, no Danger Zone required.
 
-Then give OpenClaw this prompt to finish setup:
-
-> You are setting up a CrossPoint e-ink reader. Read the README at `https://github.com/laird/crosspoint-claw` — specifically the **AI Agent Operations** section. The reader is at `<reader IP>`. DZ password is `<your password>`. Set the feed URL to `http://<feed server IP>:8090/feed.xml` via the settings API, then confirm it's working.
-
-Once the feed URL is set, **turn Danger Zone off** on the device. The reader will now pull content from the feed on every WiFi connect automatically — no agent access or DZ needed for day-to-day use.
-
-### Step 4 — Point OpenClaw at the feed server
-
-With DZ off, OpenClaw delivers content by dropping files into the feed server directory:
-
-```
-feed-server/
-├── books/chip/      ← AI-written stories and EPUBs
-├── books/erotic/    ← AO3 downloads
-├── thought/         ← Articles and essays
-├── news/            ← Daily briefings (JSON)
-└── sleep/           ← Sleep screen art (BMP)
-```
-
-The reader syncs on the next WiFi connect. For on-demand direct pushes ("put this book on my reader right now"), re-enable DZ temporarily.
+**Danger Zone** is only needed for destructive operations: reboot, firmware flash, OTA update, and screenshot tour. For day-to-day content delivery it stays off.
 
 ---
 
@@ -334,10 +308,10 @@ Without `--repo`, `gh` defaults to the upstream repo (`crosspoint-reader/crosspo
 This section is a complete reference for an AI agent managing these readers. Copy it as a system prompt or context block for any OpenClaw instance.
 
 **Two modes of use:**
-- **Content delivery** (most users): The firmware is already installed. OpenClaw pushes books, news, and articles to the reader over WiFi. No build tools or firmware knowledge needed.
-- **Firmware development**: OpenClaw builds and flashes new firmware wirelessly. Requires PlatformIO installed and the source repo cloned.
+- **Content delivery** (most users): OpenClaw pushes books, news, and articles directly to the reader over WiFi. No Danger Zone, no feed server, no build tools needed — just the reader's IP address.
+- **Firmware development**: OpenClaw builds and flashes new firmware wirelessly. Requires PlatformIO, the source repo, and Danger Zone enabled.
 
-> **First-time firmware install** is a human step done once via browser + USB (see [Setup](#setup) above). After that, OpenClaw handles everything wirelessly.
+> **Danger Zone** is only required for: reboot, firmware flash, OTA install, screenshot tour. All content operations (upload, delete, settings) work without it.
 
 ### Reader Network Info
 
