@@ -575,21 +575,22 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     QrUtils::drawQrCode(renderer, qrBoundsUrl, hostnameUrl);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
-    startY += drawCenteredWrapped(PULSR_12_FONT_ID, startY, hostnameUrl.c_str(), true);
+    const bool apTextBlack = !UITheme::isInverted();  // white text in dark mode
+    startY += drawCenteredWrapped(PULSR_12_FONT_ID, startY, hostnameUrl.c_str(), apTextBlack);
     startY += metrics.verticalSpacing;
-    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, ipUrl.c_str(), true);
+    startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, ipUrl.c_str(), apTextBlack);
     startY += metrics.verticalSpacing;
 
     // Completed uploads list (oldest first), left-justified in PULSR font
     const int pulsrLineH = renderer.getLineHeight(PULSR_12_FONT_ID);
     for (const auto& name : UITheme::getReceivedFiles()) {
-      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), true);
+      renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, name.c_str(), apTextBlack);
       startY += pulsrLineH;
     }
     // In-progress upload
     if (uploadStatus.inProgress && !uploadStatus.filename.empty()) {
       renderer.drawText(PULSR_12_FONT_ID, contentLeft, startY, (std::string("● ") + uploadStatus.filename).c_str(),
-                        true, EpdFontFamily::BOLD);
+                        apTextBlack, EpdFontFamily::BOLD);
     }
   } else {
     startY += metrics.verticalSpacing * 2;

@@ -87,11 +87,12 @@ void NetworkModeSelectionActivity::render(RenderLock&&) {
   // Show recently received files (from feed sync or HTTP uploads) below the menu
   const auto& received = UITheme::getReceivedFiles();
   if (!received.empty()) {
+    const bool textBlack = !UITheme::isInverted();  // white text in dark mode
     const int lineH = renderer.getLineHeight(PULSR_10_FONT_ID);
     int ry = contentTop + contentHeight - (static_cast<int>(received.size()) * lineH);
     for (const auto& name : received) {
       if (ry >= contentTop) {
-        renderer.drawText(PULSR_10_FONT_ID, metrics.contentSidePadding, ry, name.c_str(), /*black=*/true);
+        renderer.drawText(PULSR_10_FONT_ID, metrics.contentSidePadding, ry, name.c_str(), textBlack);
       }
       ry += lineH;
     }
