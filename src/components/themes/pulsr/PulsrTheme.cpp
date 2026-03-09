@@ -1044,7 +1044,10 @@ void PulsrTheme::drawKeyboardKey(const GfxRenderer& renderer, Rect rect, const c
 
 void PulsrTheme::drawHelpText(const GfxRenderer& renderer, Rect rect, const char* label) const {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  auto truncated = renderer.truncatedText(PULSR_10_FONT_ID, label, rect.width - metrics.contentSidePadding * 2);
-  renderer.drawCenteredText(PULSR_10_FONT_ID, rect.y + (rect.height - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2,
-                            truncated.c_str(), b(false));
+  // Center within the content pane (excluding left sidebar), not the full display width.
+  const Rect cr = contentRect(rect);
+  auto truncated = renderer.truncatedText(PULSR_10_FONT_ID, label, cr.width - metrics.contentSidePadding * 2);
+  const int labelW = renderer.getTextWidth(PULSR_10_FONT_ID, truncated.c_str());
+  const int labelY = cr.y + (cr.height - renderer.getTextHeight(PULSR_10_FONT_ID)) / 2;
+  renderer.drawText(PULSR_10_FONT_ID, cr.x + (cr.width - labelW) / 2, labelY, truncated.c_str(), b(false));
 }
