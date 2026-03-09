@@ -105,10 +105,13 @@ std::string getLastLogs() {
     return {};
   }
 
-  // Snapshot message pointers outside the critical section to avoid heap
-  // allocation (std::string +=) while interrupts are disabled.
-  // Static allocation avoids consuming 4KB of task stack on embedded targets.
-  static char snapshot[MAX_LOG_LINES][MAX_ENTRY_LEN];
+  // Snapshot under a dedicated mutex so each caller gets its own isolated copy.
+  // We use a second portMUX (snapshotMux) to serialize concurrent callers of
+  // getLastLogs() without holding logMux (which would block the logging ISR
+  // path) during the heap work that follows.
+  static portMUX_TYPE snapshotMux = portMUX_INITIALIZER_UNLOCKED;
+  portENTER_CRITICAL(&snapshotMux);
+  char snapshot[MAX_LOG_LINES][MAX_ENTRY_LEN];
   size_t snapHead = 0;
   portENTER_CRITICAL(&logMux);
   memcpy(snapshot, logMessages, sizeof(snapshot));
@@ -123,6 +126,7 @@ std::string getLastLogs() {
       output += snapshot[idx];
     }
   }
+  portEXIT_CRITICAL(&snapshotMux);
   return output;
 }
 
