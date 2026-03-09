@@ -1,0 +1,703 @@
+#include "MdReaderActivity.h"
+
+#include <MdParser.h>
+
+#include <GfxRenderer.h>
+#include <HalStorage.h>
+#include <I18n.h>
+#include <Serialization.h>
+#include <Utf8.h>
+
+#include <algorithm>
+
+#include "CrossPointSettings.h"
+#include "CrossPointState.h"
+#include "MappedInputManager.h"
+#include "RecentBooksStore.h"
+#include "activities/ActivityResult.h"
+#include "components/UITheme.h"
+#include "fontIds.h"
+
+namespace {
+constexpr unsigned long goHomeMs = 1000;
+constexpr int statusBarMargin = 25;
+constexpr int progressBarMarginTop = 1;
+constexpr size_t CHUNK_SIZE = 8 * 1024;
+// Cache magic distinct from TxtReader ("TXTI") to avoid collisions
+constexpr uint32_t CACHE_MAGIC = 0x4D445249;  // "MDRI"
+constexpr uint8_t CACHE_VERSION = 1;
+}  // namespace
+
+// ── Markdown parsing helpers ──────────────────────────────────────────────────
+
+
+
+// ── Activity lifecycle ────────────────────────────────────────────────────────
+
+void MdReaderActivity::onEnter() {
+  Activity::onEnter();
+  if (!txt) return;
+
+  switch (SETTINGS.orientation) {
+    case CrossPointSettings::ORIENTATION::PORTRAIT:
+      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+      break;
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CW:
+      renderer.setOrientation(GfxRenderer::Orientation::LandscapeClockwise);
+      break;
+    case CrossPointSettings::ORIENTATION::INVERTED:
+      renderer.setOrientation(GfxRenderer::Orientation::PortraitInverted);
+      break;
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CCW:
+      renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
+      break;
+    default:
+      break;
+  }
+
+  txt->setupCacheDir();
+
+  const auto filePath = txt->getPath();
+  const auto fileName = filePath.substr(filePath.rfind('/') + 1);
+  APP_STATE.openEpubPath = filePath;
+  APP_STATE.saveToFile();
+  RECENT_BOOKS.addBook(filePath, fileName, "", "");
+
+  requestUpdate();
+}
+
+void MdReaderActivity::onExit() {
+  // Save progress before clearing state, in case the user exits before any render completes
+  if (txt && initialized) {
+    saveProgress();
+  }
+  Activity::onExit();
+  renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+  pageOffsets.clear();
+  pageCodeFences.clear();
+  currentPageLines.clear();
+  APP_STATE.readerActivityLoadCount = 0;
+  APP_STATE.saveToFile();
+  txt.reset();
+}
+
+void MdReaderActivity::loop() {
+  if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= goHomeMs) {
+    onGoBack();
+    return;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && mappedInput.getHeldTime() < goHomeMs) {
+    onGoHome();
+    return;
+  }
+
+  const bool usePressForPageTurn = !SETTINGS.longPressChapterSkip;
+  const bool prevTriggered = usePressForPageTurn ? (mappedInput.wasPressed(MappedInputManager::Button::PageBack) ||
+                                                    mappedInput.wasPressed(MappedInputManager::Button::Left))
+                                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageBack) ||
+                                                    mappedInput.wasReleased(MappedInputManager::Button::Left));
+  const bool powerPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
+                             mappedInput.wasReleased(MappedInputManager::Button::Power);
+  const bool nextTriggered = usePressForPageTurn
+                                 ? (mappedInput.wasPressed(MappedInputManager::Button::PageForward) || powerPageTurn ||
+                                    mappedInput.wasPressed(MappedInputManager::Button::Right))
+                                 : (mappedInput.wasReleased(MappedInputManager::Button::PageForward) || powerPageTurn ||
+                                    mappedInput.wasReleased(MappedInputManager::Button::Right));
+
+  // Confirm button opens the reader menu (orientation, etc.)
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    startActivityForResult(
+        std::make_unique<EpubReaderMenuActivity>(renderer, mappedInput, txt ? txt->getPath() : "", currentPage + 1,
+                                                 totalPages, 0, SETTINGS.orientation, false),
+        [this](const ActivityResult& result) {
+          const auto& menu = std::get<MenuResult>(result.data);
+          applyOrientation(menu.orientation);
+        });
+    return;
+  }
+
+  if (!prevTriggered && !nextTriggered) return;
+
+  if (prevTriggered && currentPage > 0) {
+    currentPage--;
+    requestUpdate();
+  } else if (nextTriggered && currentPage < totalPages - 1) {
+    currentPage++;
+    requestUpdate();
+  }
+}
+
+// ── Initialization ────────────────────────────────────────────────────────────
+
+void MdReaderActivity::applyOrientation(const uint8_t orientation) {
+  if (SETTINGS.orientation == orientation) return;
+
+  SETTINGS.orientation = orientation;
+  SETTINGS.saveToFile();
+
+  switch (orientation) {
+    case CrossPointSettings::ORIENTATION::PORTRAIT:
+      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+      break;
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CW:
+      renderer.setOrientation(GfxRenderer::Orientation::LandscapeClockwise);
+      break;
+    case CrossPointSettings::ORIENTATION::INVERTED:
+      renderer.setOrientation(GfxRenderer::Orientation::PortraitInverted);
+      break;
+    case CrossPointSettings::ORIENTATION::LANDSCAPE_CCW:
+      renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
+      break;
+    default:
+      break;
+  }
+
+  // Reset all reader state so it re-paginates for the new viewport dimensions
+  initialized = false;
+  pageOffsets.clear();
+  pageCodeFences.clear();
+  pageSubLineStarts.clear();
+  currentPageLines.clear();
+  currentPage = 0;
+  requestUpdate();
+}
+
+void MdReaderActivity::initializeReader() {
+  if (initialized) return;
+
+  cachedFontId = SETTINGS.getReaderFontId();
+  cachedScreenMargin = SETTINGS.screenMargin;
+  cachedParagraphAlignment = SETTINGS.paragraphAlignment;
+
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  orientedMarginTop += cachedScreenMargin;
+  orientedMarginLeft += cachedScreenMargin;
+  orientedMarginRight += cachedScreenMargin;
+  orientedMarginBottom += cachedScreenMargin;
+
+  auto metrics = UITheme::getInstance().getMetrics();
+  if (SETTINGS.statusBar != CrossPointSettings::STATUS_BAR_MODE::NONE) {
+    const bool showProgressBar = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::BOOK_PROGRESS_BAR ||
+                                 SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::ONLY_BOOK_PROGRESS_BAR ||
+                                 SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
+    orientedMarginBottom += statusBarMargin - cachedScreenMargin +
+                            (showProgressBar ? (metrics.progressBarHeight + progressBarMarginTop) : 0);
+  }
+
+  viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
+  const int viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
+  const int lineHeight = renderer.getLineHeight(cachedFontId);
+
+  linesPerPage = viewportHeight / lineHeight;
+  if (linesPerPage < 1) linesPerPage = 1;
+
+  LOG_DBG("MRS", "Viewport: %dx%d, lines per page: %d", viewportWidth, viewportHeight, linesPerPage);
+
+  if (!loadPageIndexCache()) {
+    buildPageIndex();
+    savePageIndexCache();
+  }
+  loadProgress();
+  initialized = true;
+}
+
+// ── Page index building ───────────────────────────────────────────────────────
+
+void MdReaderActivity::buildPageIndex() {
+  pageOffsets.clear();
+  pageCodeFences.clear();
+  pageSubLineStarts.clear();
+  pageOffsets.push_back(0);
+  pageCodeFences.push_back(false);
+  pageSubLineStarts.push_back(0);
+
+  size_t offset = 0;
+  int subLineStart = 0;
+  bool inCodeFence = false;
+  const size_t fileSize = txt->getFileSize();
+
+  LOG_DBG("MRS", "Building page index for %zu bytes...", fileSize);
+  GUI.drawPopup(renderer, tr(STR_INDEXING));
+
+  while (offset < fileSize) {
+    std::vector<MdLine> tempLines;
+    size_t nextOffset = offset;
+    int nextSubLineStart = 0;
+    if (!loadPageAtOffset(offset, subLineStart, tempLines, nextOffset, nextSubLineStart, inCodeFence, false)) break;
+    // Guard: must make forward progress
+    if (nextOffset < offset || (nextOffset == offset && nextSubLineStart <= subLineStart)) break;
+
+    offset = nextOffset;
+    subLineStart = nextSubLineStart;
+    if (offset < fileSize || subLineStart > 0) {
+      pageOffsets.push_back(offset);
+      pageCodeFences.push_back(inCodeFence);
+      pageSubLineStarts.push_back(static_cast<uint8_t>(std::min(subLineStart, 255)));
+    }
+    if (pageOffsets.size() % 20 == 0) vTaskDelay(1);
+  }
+
+  totalPages = pageOffsets.size();
+  LOG_DBG("MRS", "Built page index: %d pages", totalPages);
+}
+
+// ── Page loading ──────────────────────────────────────────────────────────────
+
+bool MdReaderActivity::loadPageAtOffset(size_t offset, int subLineStart, std::vector<MdLine>& outLines,
+                                        size_t& nextOffset, int& nextSubLineStart, bool& inCodeFence,
+                                        bool stripInline) {
+  outLines.clear();
+  const size_t fileSize = txt->getFileSize();
+  if (offset >= fileSize) return false;
+
+  size_t chunkSize = std::min(CHUNK_SIZE, fileSize - offset);
+  auto* buffer = static_cast<uint8_t*>(malloc(chunkSize + 1));
+  if (!buffer) {
+    LOG_ERR("MRS", "Failed to allocate %zu bytes", chunkSize);
+    return false;
+  }
+  if (!txt->readContent(buffer, offset, chunkSize)) {
+    free(buffer);
+    return false;
+  }
+  buffer[chunkSize] = '\0';
+
+  nextSubLineStart = 0;              // default: next page starts fresh at sub-line 0
+  int remainingSkip = subLineStart;  // sub-lines to skip for first raw line only
+
+  size_t pos = 0;
+  while (pos < chunkSize && static_cast<int>(outLines.size()) < linesPerPage) {
+    // Find end of line
+    size_t lineEnd = pos;
+    while (lineEnd < chunkSize && buffer[lineEnd] != '\n') lineEnd++;
+
+    const bool lineComplete = (lineEnd < chunkSize) || (offset + lineEnd >= fileSize);
+    if (!lineComplete && !outLines.empty()) break;  // Incomplete line at chunk edge — stop here
+
+    const size_t lineContentLen = lineEnd - pos;
+    const bool hasCR = (lineContentLen > 0 && buffer[pos + lineContentLen - 1] == '\r');
+    const size_t displayLen = hasCR ? lineContentLen - 1 : lineContentLen;
+    std::string rawLine(reinterpret_cast<char*>(buffer + pos), displayLen);
+
+    // Save fence state so we can restore it if this raw line doesn't fit on the current page
+    const bool fenceBeforeLine = inCodeFence;
+
+    MdLine mdLine = MdParser::parseMdLine(rawLine, inCodeFence, stripInline);
+
+    // Build word-wrapped sub-lines from this raw line
+    std::vector<MdLine> subLines;
+    if (mdLine.isHRule || mdLine.text.empty()) {
+      subLines.push_back(mdLine);
+    } else {
+      const int effectiveWidth = viewportWidth - mdLine.indentPixels;
+      std::string remaining = mdLine.text;
+      while (!remaining.empty()) {
+        if (renderer.getTextWidth(cachedFontId, remaining.c_str(), static_cast<EpdFontFamily::Style>(mdLine.style)) <= effectiveWidth) {
+          MdLine wl = mdLine;
+          wl.text = remaining;
+          subLines.push_back(wl);
+          remaining.clear();
+        } else {
+          // Find break point
+          size_t breakPos = remaining.length();
+          while (breakPos > 0 && renderer.getTextWidth(cachedFontId, remaining.substr(0, breakPos).c_str(),
+                                                       static_cast<EpdFontFamily::Style>(mdLine.style)) > effectiveWidth) {
+            size_t spacePos = remaining.rfind(' ', breakPos - 1);
+            if (spacePos != std::string::npos && spacePos > 0) {
+              breakPos = spacePos;
+            } else {
+              breakPos--;
+              while (breakPos > 0 && (remaining[breakPos] & 0xC0) == 0x80) breakPos--;
+            }
+          }
+          if (breakPos == 0) breakPos = 1;
+          MdLine wl = mdLine;
+          wl.text = remaining.substr(0, breakPos);
+          subLines.push_back(wl);
+          size_t skipChars = breakPos;
+          if (breakPos < remaining.length() && remaining[breakPos] == ' ') skipChars++;
+          remaining = remaining.substr(skipChars);
+        }
+      }
+    }
+
+    const int lineSkip = remainingSkip;
+    remainingSkip = 0;  // skip only applies to first raw line in this call
+
+    const int effectiveCount = static_cast<int>(subLines.size()) - lineSkip;
+    if (effectiveCount <= 0) {
+      // All sub-lines already accounted for by skip — advance past line
+      pos = lineEnd + 1;
+      continue;
+    }
+
+    const int spaceLeft = linesPerPage - static_cast<int>(outLines.size());
+    if (outLines.empty() || effectiveCount <= spaceLeft) {
+      // All remaining sub-lines fit (or page is empty — must make progress)
+      const int toAdd = std::min(effectiveCount, spaceLeft > 0 ? spaceLeft : linesPerPage);
+      for (int k = lineSkip; k < lineSkip + toAdd; k++) outLines.push_back(subLines[k]);
+
+      if (lineSkip + toAdd < static_cast<int>(subLines.size())) {
+        // Partial emit: this raw line has more sub-lines than fit on the page.
+        // Return same file offset so next call re-processes this line from sub-line [toAdd].
+        nextOffset = offset + pos;
+        nextSubLineStart = lineSkip + toAdd;
+        free(buffer);
+        return true;
+      }
+
+      pos = lineEnd + 1;  // All sub-lines emitted — advance past raw line
+    } else {
+      // None fit (page already has content) — stop before this raw line
+      inCodeFence = fenceBeforeLine;
+      break;
+    }
+  }
+
+  if (pos == 0 && !outLines.empty()) pos = 1;  // Safety: ensure forward progress
+  nextOffset = offset + pos;
+  if (nextOffset > fileSize) nextOffset = fileSize;
+
+  free(buffer);
+  return !outLines.empty();
+}
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+
+void MdReaderActivity::render(RenderLock&&) {
+  if (!txt) return;
+  if (!initialized) initializeReader();
+
+  if (pageOffsets.empty()) {
+    renderer.clearScreen();
+    renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_EMPTY_FILE), true, EpdFontFamily::BOLD);
+    renderer.displayBuffer();
+    return;
+  }
+
+  if (currentPage < 0) currentPage = 0;
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+
+  const size_t offset = pageOffsets[currentPage];
+  bool inCodeFence = (currentPage < static_cast<int>(pageCodeFences.size())) ? pageCodeFences[currentPage] : false;
+  const int subLineStart =
+      (currentPage < static_cast<int>(pageSubLineStarts.size())) ? pageSubLineStarts[currentPage] : 0;
+  size_t nextOffset;
+  int nextSubLineStart;
+  currentPageLines.clear();
+  loadPageAtOffset(offset, subLineStart, currentPageLines, nextOffset, nextSubLineStart, inCodeFence);
+
+  renderer.clearScreen();
+  renderPage();
+  renderer.clearFontCache();
+  saveProgress();
+}
+
+void MdReaderActivity::renderPage() {
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  orientedMarginTop += cachedScreenMargin;
+  orientedMarginLeft += cachedScreenMargin;
+  orientedMarginRight += cachedScreenMargin;
+  const auto& margins_metrics = UITheme::getInstance().getMetrics();
+  const bool showProgressBarRM = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::BOOK_PROGRESS_BAR ||
+                                 SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::ONLY_BOOK_PROGRESS_BAR ||
+                                 SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
+  if (SETTINGS.statusBar != CrossPointSettings::STATUS_BAR_MODE::NONE) {
+    orientedMarginBottom +=
+        statusBarMargin - cachedScreenMargin +
+        (showProgressBarRM ? (margins_metrics.progressBarHeight + margins_metrics.progressBarMarginTop) : 0);
+  }
+
+  const int lineHeight = renderer.getLineHeight(cachedFontId);
+  const int contentWidth = viewportWidth;
+
+  auto renderLines = [&]() {
+    int y = orientedMarginTop;
+    for (const auto& line : currentPageLines) {
+      if (line.isHRule) {
+        renderer.fillRect(orientedMarginLeft, y + lineHeight / 2, contentWidth, 1, true);
+      } else if (!line.text.empty()) {
+        int x = orientedMarginLeft + line.indentPixels;
+        // Apply user alignment only for non-indented lines (headings/bullets always left-align)
+        if (line.indentPixels == 0) {
+          switch (cachedParagraphAlignment) {
+            case CrossPointSettings::CENTER_ALIGN: {
+              const int w = renderer.getTextWidth(cachedFontId, line.text.c_str(), static_cast<EpdFontFamily::Style>(line.style));
+              x = orientedMarginLeft + (contentWidth - w) / 2;
+              break;
+            }
+            case CrossPointSettings::RIGHT_ALIGN: {
+              const int w = renderer.getTextWidth(cachedFontId, line.text.c_str(), static_cast<EpdFontFamily::Style>(line.style));
+              x = orientedMarginLeft + contentWidth - w;
+              break;
+            }
+            default:
+              break;
+          }
+        }
+        renderer.drawText(cachedFontId, x, y, line.text.c_str(), true, static_cast<EpdFontFamily::Style>(line.style));
+      }
+      y += lineHeight;
+    }
+  };
+
+  // First pass: BW rendering + display
+  renderLines();
+  renderStatusBar(orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
+
+  if (pagesUntilFullRefresh <= 1) {
+    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+  } else {
+    renderer.displayBuffer();
+    pagesUntilFullRefresh--;
+  }
+
+  // Optional grayscale anti-aliasing pass
+  if (SETTINGS.textAntiAliasing) {
+    renderer.storeBwBuffer();
+
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
+    renderLines();
+    renderer.copyGrayscaleLsbBuffers();
+
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
+    renderLines();
+    renderer.copyGrayscaleMsbBuffers();
+
+    renderer.displayGrayBuffer();
+    renderer.setRenderMode(GfxRenderer::BW);
+    renderer.restoreBwBuffer();
+  }
+}
+
+void MdReaderActivity::renderStatusBar(const int orientedMarginRight, const int orientedMarginBottom,
+                                       const int orientedMarginLeft) const {
+  const bool showProgressPercentage = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::FULL;
+  const bool showProgressBar = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::BOOK_PROGRESS_BAR ||
+                               SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::ONLY_BOOK_PROGRESS_BAR;
+  const bool showChapterProgressBar = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
+  const bool showProgressText = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::FULL ||
+                                SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::BOOK_PROGRESS_BAR;
+  const bool showBookPercentage = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
+  const bool showBattery = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::NO_PROGRESS ||
+                           SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::FULL ||
+                           SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::BOOK_PROGRESS_BAR ||
+                           SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
+  const bool showTitle = SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::NO_PROGRESS ||
+                         SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::FULL ||
+                         SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::BOOK_PROGRESS_BAR ||
+                         SETTINGS.statusBar == CrossPointSettings::STATUS_BAR_MODE::CHAPTER_PROGRESS_BAR;
+  const bool showBatteryPercentage =
+      SETTINGS.hideBatteryPercentage == CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_NEVER;
+
+  auto metrics = UITheme::getInstance().getMetrics();
+  const auto screenHeight = renderer.getScreenHeight();
+  const auto textY = screenHeight - orientedMarginBottom - 4;
+  int progressTextWidth = 0;
+
+  const float progress = totalPages > 0 ? (currentPage + 1) * 100.0f / totalPages : 0;
+
+  if (showProgressText || showProgressPercentage || showBookPercentage) {
+    char progressStr[32];
+    if (showProgressPercentage) {
+      snprintf(progressStr, sizeof(progressStr), "%d/%d %.0f%%", currentPage + 1, totalPages, progress);
+    } else if (showBookPercentage) {
+      snprintf(progressStr, sizeof(progressStr), "%.0f%%", progress);
+    } else {
+      snprintf(progressStr, sizeof(progressStr), "%d/%d", currentPage + 1, totalPages);
+    }
+    progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressStr);
+    renderer.drawText(SMALL_FONT_ID, renderer.getScreenWidth() - orientedMarginRight - progressTextWidth, textY,
+                      progressStr);
+  }
+
+  if (showProgressBar || showChapterProgressBar) {
+    GUI.drawReadingProgressBar(renderer, static_cast<size_t>(progress));
+  }
+
+  if (showBattery) {
+    GUI.drawBatteryLeft(renderer, Rect{orientedMarginLeft, textY, metrics.batteryWidth, metrics.batteryHeight},
+                        showBatteryPercentage);
+  }
+
+  if (showTitle) {
+    const int titleMarginLeft = 50 + 30 + orientedMarginLeft;
+    const int titleMarginRight = progressTextWidth + 30 + orientedMarginRight;
+    const int availableTextWidth = renderer.getScreenWidth() - titleMarginLeft - titleMarginRight;
+    std::string title = txt->getTitle();
+    int titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
+    if (titleWidth > availableTextWidth) {
+      title = renderer.truncatedText(SMALL_FONT_ID, title.c_str(), availableTextWidth);
+      titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
+    }
+    renderer.drawText(SMALL_FONT_ID, titleMarginLeft + (availableTextWidth - titleWidth) / 2, textY, title.c_str());
+  }
+}
+
+// ── Progress persistence ──────────────────────────────────────────────────────
+
+void MdReaderActivity::saveProgress() const {
+  FsFile f;
+  if (Storage.openFileForWrite("MRS", txt->getCachePath() + "/progress.bin", f)) {
+    const uint8_t data[4] = {static_cast<uint8_t>(currentPage & 0xFF), static_cast<uint8_t>((currentPage >> 8) & 0xFF),
+                             0, 0};
+    f.write(data, 4);
+    f.close();
+  }
+}
+
+void MdReaderActivity::loadProgress() {
+  FsFile f;
+  if (Storage.openFileForRead("MRS", txt->getCachePath() + "/progress.bin", f)) {
+    uint8_t data[4];
+    if (f.read(data, 4) == 4) {
+      currentPage = data[0] + (data[1] << 8);
+      if (currentPage >= totalPages) currentPage = totalPages - 1;
+      if (currentPage < 0) currentPage = 0;
+      LOG_DBG("MRS", "Loaded progress: page %d/%d", currentPage, totalPages);
+    }
+    f.close();
+  }
+}
+
+// ── Page index cache ──────────────────────────────────────────────────────────
+// Format: magic(4) | version(1) | fileSize(4) | viewportWidth(4) | linesPerPage(4)
+//         fontId(4) | screenMargin(4) | paragraphAlignment(1)
+//         numPages(4) | N × (offset(4) + codeFenceState(1) + subLineStart(1))
+
+bool MdReaderActivity::loadPageIndexCache() {
+  std::string cachePath = txt->getCachePath() + "/md_index.bin";
+  FsFile f;
+  if (!Storage.openFileForRead("MRS", cachePath, f)) {
+    LOG_DBG("MRS", "No page index cache found");
+    return false;
+  }
+
+  uint32_t magic;
+  serialization::readPod(f, magic);
+  if (magic != CACHE_MAGIC) {
+    f.close();
+    return false;
+  }
+
+  uint8_t version;
+  serialization::readPod(f, version);
+  if (version != CACHE_VERSION) {
+    f.close();
+    return false;
+  }
+
+  uint32_t fileSize;
+  serialization::readPod(f, fileSize);
+  if (fileSize != txt->getFileSize()) {
+    f.close();
+    return false;
+  }
+
+  int32_t cachedWidth;
+  serialization::readPod(f, cachedWidth);
+  if (cachedWidth != viewportWidth) {
+    f.close();
+    return false;
+  }
+
+  int32_t cachedLines;
+  serialization::readPod(f, cachedLines);
+  if (cachedLines != linesPerPage) {
+    f.close();
+    return false;
+  }
+
+  int32_t fontId;
+  serialization::readPod(f, fontId);
+  if (fontId != cachedFontId) {
+    f.close();
+    return false;
+  }
+
+  int32_t margin;
+  serialization::readPod(f, margin);
+  if (margin != cachedScreenMargin) {
+    f.close();
+    return false;
+  }
+
+  uint8_t alignment;
+  serialization::readPod(f, alignment);
+  if (alignment != cachedParagraphAlignment) {
+    f.close();
+    return false;
+  }
+
+  uint32_t numPages;
+  serialization::readPod(f, numPages);
+
+  // Validate before allocating: each entry is offset(4) + codeFenceState(1) + subLineStart(1)
+  constexpr uint32_t kEntrySize = sizeof(uint32_t) + sizeof(uint8_t) + sizeof(uint8_t);
+  const uint32_t remaining = (f.size() > f.position()) ? (f.size() - f.position()) : 0;
+  if (numPages == 0 || numPages > remaining / kEntrySize || numPages > 1000000u) {
+    f.close();
+    return false;
+  }
+
+  pageOffsets.clear();
+  pageCodeFences.clear();
+  pageSubLineStarts.clear();
+  pageOffsets.reserve(numPages);
+  pageCodeFences.reserve(numPages);
+  pageSubLineStarts.reserve(numPages);
+
+  for (uint32_t i = 0; i < numPages; i++) {
+    uint32_t off;
+    serialization::readPod(f, off);
+    pageOffsets.push_back(off);
+    uint8_t fence;
+    serialization::readPod(f, fence);
+    pageCodeFences.push_back(fence != 0);
+    uint8_t sls;
+    serialization::readPod(f, sls);
+    pageSubLineStarts.push_back(sls);
+  }
+
+  f.close();
+  totalPages = pageOffsets.size();
+  LOG_DBG("MRS", "Loaded page index cache: %d pages", totalPages);
+  return true;
+}
+
+void MdReaderActivity::savePageIndexCache() const {
+  std::string cachePath = txt->getCachePath() + "/md_index.bin";
+  FsFile f;
+  if (!Storage.openFileForWrite("MRS", cachePath, f)) {
+    LOG_ERR("MRS", "Failed to save page index cache");
+    return;
+  }
+
+  serialization::writePod(f, CACHE_MAGIC);
+  serialization::writePod(f, CACHE_VERSION);
+  serialization::writePod(f, static_cast<uint32_t>(txt->getFileSize()));
+  serialization::writePod(f, static_cast<int32_t>(viewportWidth));
+  serialization::writePod(f, static_cast<int32_t>(linesPerPage));
+  serialization::writePod(f, static_cast<int32_t>(cachedFontId));
+  serialization::writePod(f, static_cast<int32_t>(cachedScreenMargin));
+  serialization::writePod(f, cachedParagraphAlignment);
+  serialization::writePod(f, static_cast<uint32_t>(pageOffsets.size()));
+
+  for (size_t i = 0; i < pageOffsets.size(); i++) {
+    serialization::writePod(f, static_cast<uint32_t>(pageOffsets[i]));
+    const uint8_t fence = (i < pageCodeFences.size() && pageCodeFences[i]) ? 1 : 0;
+    serialization::writePod(f, fence);
+    const uint8_t sls = (i < pageSubLineStarts.size()) ? pageSubLineStarts[i] : 0;
+    serialization::writePod(f, sls);
+  }
+
+  f.close();
+  LOG_DBG("MRS", "Saved page index cache: %d pages", totalPages);
+}

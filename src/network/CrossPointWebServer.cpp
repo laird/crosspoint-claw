@@ -16,7 +16,6 @@
 #include "html/FilesPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
-#include "util/StringUtils.h"
 
 namespace {
 // Folders/files to hide from the web interface file browser
@@ -44,7 +43,7 @@ unsigned long wsLastCompleteAt = 0;
 // Helper function to clear epub cache after upload
 void clearEpubCacheIfNeeded(const String& filePath) {
   // Only clear cache for .epub files
-  if (StringUtils::checkFileExtension(filePath, ".epub")) {
+  if (FsHelpers::hasEpubExtension(filePath)) {
     Epub(filePath.c_str(), "/.crosspoint").clearCache();
     LOG_DBG("WEB", "Cleared epub cache for: %s", filePath.c_str());
   }
@@ -391,11 +390,7 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
   root.close();
 }
 
-bool CrossPointWebServer::isEpubFile(const String& filename) const {
-  String lower = filename;
-  lower.toLowerCase();
-  return lower.endsWith(".epub");
-}
+bool CrossPointWebServer::isEpubFile(const String& filename) const { return FsHelpers::hasEpubExtension(filename); }
 
 void CrossPointWebServer::handleFileList() const {
   sendHtmlContent(server.get(), FilesPageHtml, sizeof(FilesPageHtml));
@@ -494,10 +489,7 @@ void CrossPointWebServer::handleDownload() const {
     return;
   }
 
-  String contentType = "application/octet-stream";
-  if (isEpubFile(itemPath)) {
-    contentType = "application/epub+zip";
-  }
+  String contentType = FsHelpers::getMimeType(itemPath);
 
   char nameBuf[128] = {0};
   String filename = "download";
@@ -505,8 +497,15 @@ void CrossPointWebServer::handleDownload() const {
     filename = nameBuf;
   }
 
+  // Use "inline" disposition for text types so the browser/web UI can display them directly;
+  // use "attachment" for binary formats to trigger a download.
+  const bool isInline = (String(contentType).startsWith("text/") ||
+                         String(contentType) == "application/json" ||
+                         String(contentType) == "application/javascript" ||
+                         String(contentType) == "application/xml");
+  const String disposition = (isInline ? "inline" : "attachment");
   server->setContentLength(file.size());
-  server->sendHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+  server->sendHeader("Content-Disposition", disposition + "; filename=\"" + filename + "\"");
   server->send(200, contentType.c_str(), "");
 
   NetworkClient client = server->client();
