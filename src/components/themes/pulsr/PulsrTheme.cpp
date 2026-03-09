@@ -471,7 +471,7 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
                           const std::function<std::string(int)>& rowValue, bool highlightValue) const {
   const Rect cr = contentRect(rect);
   const int rowH = (rowSubtitle != nullptr) ? Lm::values.listWithSubtitleRowHeight : Lm::values.listRowHeight;
-  const int pageItems = cr.height / rowH;
+  const int pageItems = std::max(1, cr.height / rowH);
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
 
   // ── Scroll indicator (arrows at right edge of content) ────────────────────

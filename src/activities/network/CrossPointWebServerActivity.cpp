@@ -549,6 +549,16 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     return lineH;
   };
 
+  // Shared truncation helper: clips text to fit in the content column width.
+  const int pulsrLineH = renderer.getLineHeight(PULSR_12_FONT_ID);
+  const int maxTextW = pageWidth - contentLeft - metrics.contentSidePadding;
+  auto truncate = [&](const std::string& s) {
+    if (renderer.getTextWidth(PULSR_12_FONT_ID, s.c_str()) <= maxTextW) return s;
+    std::string t = s;
+    while (!t.empty() && renderer.getTextWidth(PULSR_12_FONT_ID, (t + "…").c_str()) > maxTextW) t.pop_back();
+    return t + "…";
+  };
+
   if (isApMode) {
     // AP mode: two QR codes stacked vertically, text centered below each.
 
