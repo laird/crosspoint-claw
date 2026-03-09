@@ -26,13 +26,13 @@ RTC_NOINIT_ATTR StackFrame panicStack[MAX_PANIC_STACK_DEPTH];
 
 extern "C" {
 
-[[noreturn]] void __real_panic_abort(const char* message);
-[[noreturn]] void __wrap_panic_abort(const char* message);
+void __attribute__((__noreturn__)) __real_panic_abort(const char* message);
+void __attribute__((__noreturn__)) __wrap_panic_abort(const char* message);
 void __real_panic_print_backtrace(const void* frame, int core);
 void __wrap_panic_print_backtrace(const void* frame, int core);
 
 static DRAM_ATTR const char PANIC_REASON_UNKNOWN[] = "(unknown panic reason)";
-[[noreturn]] void IRAM_ATTR __wrap_panic_abort(const char* message) {
+void __attribute__((__noreturn__)) IRAM_ATTR __wrap_panic_abort(const char* message) {
   if (!message) message = PANIC_REASON_UNKNOWN;
   // IRAM-safe bounded copy (strncpy is not IRAM-safe in panic context)
   int i = 0;

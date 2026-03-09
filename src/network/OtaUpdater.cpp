@@ -327,20 +327,24 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
     return INTERNAL_UPDATE_ERROR;
   }
 
-  // esp_https_ota_finish() internally calls esp_ota_set_boot_partition(), which validates
-  // the firmware image and returns ESP_ERR_OTA_VALIDATE_FAILED for unsigned Arduino builds
-  // (no embedded SHA256) or when the binary's min_efuse_blk_rev_full exceeds the chip's.
-  // The firmware data was written correctly; tolerate that error and use
-  // forceSetBootPartitionOta() to write the otadata entry directly instead.
+  // esp_https_ota_finish() calls esp_ota_set_boot_partition() internally.
+  // On unsigned Arduino builds it returns ESP_ERR_OTA_VALIDATE_FAILED because
+  // the image has no embedded SHA256 (no secure boot). The firmware data was
+  // written correctly; in that specific case use forceSetBootPartitionOta() to
+  // write the otadata entry directly. Any other error is a genuine failure.
   esp_err = esp_https_ota_finish(ota_handle);
-  if (esp_err != ESP_OK && esp_err != ESP_ERR_OTA_VALIDATE_FAILED) {
+  if (esp_err == ESP_OK) {
+    // Normal path: otadata already updated by esp_https_ota_finish().
+    LOG_INF("OTA", "Update completed");
+    return OK;
+  }
+  if (esp_err != ESP_ERR_OTA_VALIDATE_FAILED) {
     LOG_ERR("OTA", "esp_https_ota_finish Failed: %s", esp_err_to_name(esp_err));
     return INTERNAL_UPDATE_ERROR;
   }
-  if (esp_err == ESP_ERR_OTA_VALIDATE_FAILED) {
-    LOG_INF("OTA", "Image validation skipped (unsigned build) — writing otadata directly");
-  }
 
+  // ESP_ERR_OTA_VALIDATE_FAILED: unsigned Arduino build — write otadata directly.
+  LOG_INF("OTA", "Image validation skipped (unsigned build) — writing otadata directly");
   esp_err = forceSetBootPartitionOta(updatePart);
   if (esp_err != ESP_OK) {
     LOG_ERR("OTA", "forceSetBootPartitionOta Failed: %s", esp_err_to_name(esp_err));
