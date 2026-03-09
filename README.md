@@ -6,14 +6,21 @@ This is a fork of [CrossPoint Reader](CROSSPOINT-README.md) that extends it with
 
 ## ⚡ Quick Install
 
-1. **Connect** your Xteink X4 to your computer via USB-C and wake/unlock the device
-2. **Download** the latest `firmware.bin` from the [releases page](https://github.com/laird/crosspoint-claw/releases/latest)
-3. **Open** [https://xteink.dve.al/](https://xteink.dve.al/) in Chrome or Edge (requires Web Serial — Firefox not supported)
-4. **Flash** using the "OTA fast flash controls" section — select your downloaded `firmware.bin` and click Flash
+> **Requirements:** Chrome or Edge browser (Web Serial API required — Firefox not supported)
 
-That's it. The device will reboot into CrossPoint OpenClaw automatically.
+**Step 1 — Download the firmware**
 
-> **To revert** to official CrossPoint firmware at any time, flash from [https://xteink.dve.al/](https://xteink.dve.al/) using "Flash CrossPoint firmware", or swap partitions at [https://xteink.dve.al/debug](https://xteink.dve.al/debug).
+Download `firmware.bin` from the [latest release](https://github.com/laird/crosspoint-claw/releases/latest).
+
+**Step 2 — Open the installer**
+
+Go to **[https://xteink.dve.al/](https://xteink.dve.al/)** and connect your Xteink X4 via USB-C. Wake/unlock the device, then click the connect button on the site and select your device from the browser's serial port prompt.
+
+**Step 3 — Flash the firmware**
+
+Scroll down to the **"OTA fast flash controls"** section. Click **Choose File**, select the `firmware.bin` you downloaded, then click **Flash**. The progress bar will fill as it uploads. When complete, the device reboots automatically into CrossPoint OpenClaw.
+
+> **To revert** to official CrossPoint firmware, use the **"Flash CrossPoint firmware"** button on [https://xteink.dve.al/](https://xteink.dve.al/), or swap back via [https://xteink.dve.al/debug](https://xteink.dve.al/debug).
 
 ---
 
