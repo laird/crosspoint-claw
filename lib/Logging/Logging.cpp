@@ -30,8 +30,18 @@ static inline char* clamp_advance(char* c, int len, const char* end) {
 }
 
 void addToLogRingBuffer(const char* message) {
-  // Add the message to the ring buffer, overwriting old messages if necessary
+  // Add the message to the ring buffer, overwriting old messages if necessary.
+  // On a cold boot, RTC_NOINIT memory is garbage until clearLastLogs() runs.
+  // Reinitialize here if the magic is missing or logHead is out of bounds to
+  // prevent an out-of-bounds write into logMessages.
   portENTER_CRITICAL(&logMux);
+  if (logInitMagic != LOG_INIT_MAGIC || logHead >= MAX_LOG_LINES) {
+    for (size_t i = 0; i < MAX_LOG_LINES; i++) {
+      logMessages[i][0] = '\0';
+    }
+    logHead = 0;
+    logInitMagic = LOG_INIT_MAGIC;
+  }
   strncpy(logMessages[logHead], message, MAX_ENTRY_LEN - 1);
   logMessages[logHead][MAX_ENTRY_LEN - 1] = '\0';
   logHead = (logHead + 1) % MAX_LOG_LINES;
