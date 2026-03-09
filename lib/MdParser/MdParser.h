@@ -1,15 +1,22 @@
 #pragma once
 #include <string>
-
-#include <EpdFont.h>  // EpdFontFamily::Style
+#include <cstdint>
 
 /// Pixel indent applied to bullets, numbered lists, and blockquotes.
 constexpr int MD_BULLET_INDENT = 20;
 
+/// Text style flags — values match EpdFontFamily::Style so callers can cast directly.
+enum class MdStyle : uint8_t {
+  REGULAR    = 0,
+  BOLD       = 1,
+  ITALIC     = 2,
+  BOLD_ITALIC = 3,
+};
+
 /// A single rendered line produced by the Markdown parser.
 struct MdLine {
   std::string text;
-  EpdFontFamily::Style style = EpdFontFamily::REGULAR;
+  MdStyle style = MdStyle::REGULAR;
   int indentPixels = 0;  ///< Left indent for bullets, numbered lists, blockquotes.
   bool isHRule = false;  ///< Draw a horizontal rule instead of text.
 };
