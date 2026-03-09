@@ -519,7 +519,7 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
                           const std::function<std::string(int)>& rowValue, bool highlightValue) const {
   const Rect cr = contentRect(rect);
   const int rowH = (rowSubtitle != nullptr) ? Lm::values.listWithSubtitleRowHeight : Lm::values.listRowHeight;
-  const int pageItems = cr.height / rowH;
+  const int pageItems = std::max(1, cr.height / rowH);
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
 
   // ── Scroll indicator (arrows at right edge of content) ────────────────────
@@ -951,7 +951,9 @@ void PulsrTheme::drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t 
   // Percentage label centered below bar
   char pctBuf[8];
   snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
-  renderer.drawCenteredText(PULSR_10_FONT_ID, cr.y + cr.height + 10, pctBuf, b(true));
+  // Center the percentage label within the content pane (not the full screen width)
+  const int labelW = renderer.getTextWidth(PULSR_10_FONT_ID, pctBuf);
+  renderer.drawText(PULSR_10_FONT_ID, cr.x + (cr.width - labelW) / 2, cr.y + cr.height + 10, pctBuf, b(true));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

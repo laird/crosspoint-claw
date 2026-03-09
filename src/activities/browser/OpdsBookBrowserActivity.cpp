@@ -171,11 +171,11 @@ void OpdsBookBrowserActivity::render(RenderLock&&) {
   }
 
   if (state == BrowserState::DOWNLOADING) {
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 40, tr(STR_DOWNLOADING));
+    renderer.drawCenteredText(PULSR_10_FONT_ID, pageHeight / 2 - 40, tr(STR_DOWNLOADING));
     const auto maxWidth = pageWidth - 40;
     // Trim long titles to keep them within the screen bounds, draw once.
-    auto title = renderer.truncatedText(UI_10_FONT_ID, statusMessage.c_str(), maxWidth);
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, title.c_str());
+    auto title = renderer.truncatedText(PULSR_10_FONT_ID, statusMessage.c_str(), maxWidth);
+    renderer.drawCenteredText(PULSR_10_FONT_ID, pageHeight / 2 - 10, title.c_str());
     if (downloadTotal > 0) {
       const int barWidth = pageWidth - 100;
       constexpr int barHeight = 20;

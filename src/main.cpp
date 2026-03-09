@@ -212,6 +212,8 @@ void enterDeepSleep() {
 extern "C" const char* getVersionString() { return CROSSPOINT_VERSION; }
 
 // Danger Zone flash request flag (claw extension — stub here).
+// TODO(claw): Danger Zone sets this flag when a web-triggered firmware flash is
+// requested. Stub here; full implementation is in feature/claw.
 volatile bool dzFlashRequested = false;
 
 void setupDisplayAndFonts() {
