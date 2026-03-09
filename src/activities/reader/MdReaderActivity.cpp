@@ -278,7 +278,7 @@ bool MdReaderActivity::loadPageAtOffset(size_t offset, int subLineStart, std::ve
       const int effectiveWidth = viewportWidth - mdLine.indentPixels;
       std::string remaining = mdLine.text;
       while (!remaining.empty()) {
-        if (renderer.getTextWidth(cachedFontId, remaining.c_str(), mdLine.style) <= effectiveWidth) {
+        if (renderer.getTextWidth(cachedFontId, remaining.c_str(), static_cast<EpdFontFamily::Style>(mdLine.style)) <= effectiveWidth) {
           MdLine wl = mdLine;
           wl.text = remaining;
           subLines.push_back(wl);
@@ -287,7 +287,7 @@ bool MdReaderActivity::loadPageAtOffset(size_t offset, int subLineStart, std::ve
           // Find break point
           size_t breakPos = remaining.length();
           while (breakPos > 0 && renderer.getTextWidth(cachedFontId, remaining.substr(0, breakPos).c_str(),
-                                                       mdLine.style) > effectiveWidth) {
+                                                       static_cast<EpdFontFamily::Style>(mdLine.style)) > effectiveWidth) {
             size_t spacePos = remaining.rfind(' ', breakPos - 1);
             if (spacePos != std::string::npos && spacePos > 0) {
               breakPos = spacePos;
@@ -382,12 +382,12 @@ void MdReaderActivity::renderPage() {
         if (line.indentPixels == 0) {
           switch (cachedParagraphAlignment) {
             case CrossPointSettings::CENTER_ALIGN: {
-              const int w = renderer.getTextWidth(cachedFontId, line.text.c_str(), line.style);
+              const int w = renderer.getTextWidth(cachedFontId, line.text.c_str(), static_cast<EpdFontFamily::Style>(line.style));
               x = orientedMarginLeft + (contentWidth - w) / 2;
               break;
             }
             case CrossPointSettings::RIGHT_ALIGN: {
-              const int w = renderer.getTextWidth(cachedFontId, line.text.c_str(), line.style);
+              const int w = renderer.getTextWidth(cachedFontId, line.text.c_str(), static_cast<EpdFontFamily::Style>(line.style));
               x = orientedMarginLeft + contentWidth - w;
               break;
             }
@@ -395,7 +395,7 @@ void MdReaderActivity::renderPage() {
               break;
           }
         }
-        renderer.drawText(cachedFontId, x, y, line.text.c_str(), true, line.style);
+        renderer.drawText(cachedFontId, x, y, line.text.c_str(), true, static_cast<EpdFontFamily::Style>(line.style));
       }
       y += lineHeight;
     }
