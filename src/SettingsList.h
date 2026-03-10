@@ -35,6 +35,8 @@ inline std::vector<SettingInfo> getSettingsList() {
                         StrId::STR_CAT_DISPLAY),
       SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                           StrId::STR_CAT_DISPLAY),
+      SettingInfo::Enum(StrId::STR_FILE_BROWSER_VIEW, &CrossPointSettings::fileBrowserView,
+                        {StrId::STR_VIEW_LIST, StrId::STR_VIEW_COVERS}, "fileBrowserView", StrId::STR_CAT_DISPLAY),
 
       // --- Reader ---
       SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,

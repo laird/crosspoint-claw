@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#include "../util/ConfirmationActivity.h"
+#include "../browser/CoverBrowserActivity.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -110,6 +110,12 @@ void FileBrowserActivity::onEnter() {
   loadFiles();
   selectorIndex = 0;
 
+  // Auto-launch cover browser if setting is VIEW_COVERS
+  if (SETTINGS.fileBrowserView == CrossPointSettings::VIEW_COVERS) {
+    startActivityForResult(std::make_unique<CoverBrowserActivity>(renderer, mappedInput, basepath),
+                           [this](const ActivityResult&) { requestUpdate(); });
+  }
+
   requestUpdate();
 }
 
@@ -145,37 +151,18 @@ void FileBrowserActivity::loop() {
     bool isDirectory = (entry.back() == '/');
 
     if (mappedInput.getHeldTime() >= GO_HOME_MS && !isDirectory) {
-      // --- LONG PRESS ACTION: DELETE FILE ---
-      std::string cleanBasePath = basepath;
-      if (cleanBasePath.back() != '/') cleanBasePath += "/";
-      const std::string fullPath = cleanBasePath + entry;
+      // --- LONG PRESS ACTION: TOGGLE COVER BROWSER VIEW ---
+      SETTINGS.fileBrowserView = (SETTINGS.fileBrowserView == CrossPointSettings::VIEW_LIST)
+                                     ? CrossPointSettings::VIEW_COVERS
+                                     : CrossPointSettings::VIEW_LIST;
+      SETTINGS.saveToFile();
 
-      auto handler = [this, fullPath](const ActivityResult& res) {
-        if (!res.isCancelled) {
-          LOG_DBG("FileBrowser", "Attempting to delete: %s", fullPath.c_str());
-          clearFileMetadata(fullPath);
-          if (Storage.remove(fullPath.c_str())) {
-            LOG_DBG("FileBrowser", "Deleted successfully");
-            loadFiles();
-            if (files.empty()) {
-              selectorIndex = 0;
-            } else if (selectorIndex >= files.size()) {
-              // Move selection to the new "last" item
-              selectorIndex = files.size() - 1;
-            }
-
-            requestUpdate(true);
-          } else {
-            LOG_ERR("FileBrowser", "Failed to delete file: %s", fullPath.c_str());
-          }
-        } else {
-          LOG_DBG("FileBrowser", "Delete cancelled by user");
-        }
-      };
-
-      std::string heading = tr(STR_DELETE) + std::string("? ");
-
-      startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, heading, entry), handler);
+      if (SETTINGS.fileBrowserView == CrossPointSettings::VIEW_COVERS) {
+        startActivityForResult(std::make_unique<CoverBrowserActivity>(renderer, mappedInput, basepath),
+                               [this](const ActivityResult&) { requestUpdate(); });
+      } else {
+        requestUpdate();
+      }
       return;
     } else {
       // --- SHORT PRESS ACTION: OPEN/NAVIGATE ---
