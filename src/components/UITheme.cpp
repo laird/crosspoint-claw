@@ -1,8 +1,11 @@
 #include "UITheme.h"
 
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
 
+#include <atomic>
+#include <cassert>
 #include <memory>
 
 #include "MappedInputManager.h"
@@ -10,13 +13,22 @@
 #include "components/themes/BaseTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
-#include "util/StringUtils.h"
 
 namespace {
 constexpr int SKIP_PAGE_MS = 700;
 }  // namespace
 
 UITheme UITheme::instance;
+
+static std::atomic<bool> s_networkConnected{false};
+static std::atomic<bool> s_networkTransferring{false};
+
+void UITheme::setNetworkStatus(bool connected, bool transferring) {
+  s_networkConnected.store(connected, std::memory_order_relaxed);
+  s_networkTransferring.store(transferring, std::memory_order_relaxed);
+}
+bool UITheme::isNetworkConnected() { return s_networkConnected.load(std::memory_order_relaxed); }
+bool UITheme::isNetworkTransferring() { return s_networkTransferring.load(std::memory_order_relaxed); }
 
 UITheme::UITheme() {
   auto themeType = static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme);
@@ -44,6 +56,11 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Lyra 3 Covers theme");
       currentTheme = std::make_unique<Lyra3CoversTheme>();
       currentMetrics = &Lyra3CoversMetrics::values;
+      break;
+    default:
+      LOG_ERR("UI", "Unknown theme value %d, falling back to Classic", static_cast<int>(type));
+      currentTheme = std::make_unique<BaseTheme>();
+      currentMetrics = &BaseMetrics::values;
       break;
   }
 }
@@ -74,18 +91,20 @@ std::string UITheme::getCoverThumbPath(std::string coverBmpPath, int coverHeight
   return coverBmpPath;
 }
 
-UIIcon UITheme::getFileIcon(std::string filename) {
+UIIcon UITheme::getFileIcon(const std::string& filename) {
+  if (filename.empty()) {
+    return File;
+  }
   if (filename.back() == '/') {
     return Folder;
   }
-  if (StringUtils::checkFileExtension(filename, ".epub") || StringUtils::checkFileExtension(filename, ".xtch") ||
-      StringUtils::checkFileExtension(filename, ".xtc")) {
+  if (FsHelpers::hasEpubExtension(filename) || FsHelpers::hasXtcExtension(filename)) {
     return Book;
   }
-  if (StringUtils::checkFileExtension(filename, ".txt") || StringUtils::checkFileExtension(filename, ".md")) {
+  if (FsHelpers::hasTxtExtension(filename) || FsHelpers::hasMarkdownExtension(filename)) {
     return Text;
   }
-  if (StringUtils::checkFileExtension(filename, ".bmp")) {
+  if (FsHelpers::hasBmpExtension(filename)) {
     return Image;
   }
   return File;
@@ -109,4 +128,44 @@ int UITheme::getProgressBarHeight() {
   const bool showProgressBar =
       SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
   return (showProgressBar ? (((SETTINGS.statusBarProgressBarThickness + 1) * 2) + metrics.progressBarMarginTop) : 0);
+}
+
+static std::atomic<bool> s_httpServerActive{false};
+static std::atomic<bool> s_wifiAutoConnecting{false};
+
+void UITheme::setHttpServerActive(bool active) { s_httpServerActive.store(active, std::memory_order_relaxed); }
+bool UITheme::isHttpServerActive() { return s_httpServerActive.load(std::memory_order_relaxed); }
+void UITheme::setWifiAutoConnecting(bool connecting) { s_wifiAutoConnecting.store(connecting, std::memory_order_relaxed); }
+bool UITheme::isWifiAutoConnecting() { return s_wifiAutoConnecting.load(std::memory_order_relaxed); }
+
+static std::vector<std::string> s_receivedFiles;
+static SemaphoreHandle_t s_receivedFilesMutex = nullptr;
+
+static void ensureReceivedFilesMutex() {
+  if (!s_receivedFilesMutex) {
+    s_receivedFilesMutex = xSemaphoreCreateMutex();
+    assert(s_receivedFilesMutex);
+  }
+}
+
+void UITheme::addReceivedFile(const std::string& name) {
+  ensureReceivedFilesMutex();
+  xSemaphoreTake(s_receivedFilesMutex, portMAX_DELAY);
+  s_receivedFiles.push_back(name);
+  xSemaphoreGive(s_receivedFilesMutex);
+}
+
+std::vector<std::string> UITheme::getReceivedFiles() {
+  ensureReceivedFilesMutex();
+  xSemaphoreTake(s_receivedFilesMutex, portMAX_DELAY);
+  auto copy = s_receivedFiles;
+  xSemaphoreGive(s_receivedFilesMutex);
+  return copy;
+}
+
+void UITheme::clearReceivedFiles() {
+  ensureReceivedFilesMutex();
+  xSemaphoreTake(s_receivedFilesMutex, portMAX_DELAY);
+  s_receivedFiles.clear();
+  xSemaphoreGive(s_receivedFilesMutex);
 }
