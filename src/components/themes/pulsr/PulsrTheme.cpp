@@ -101,7 +101,6 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
 
   // ── Version string — right-aligned in top bar, white text ──────────────────
   {
-    extern const char* getVersionString();
     const char* ver = getVersionString();
     if (ver && ver[0] != '\0') {
       constexpr int margin = 8;
@@ -555,6 +554,7 @@ void PulsrTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount,
                           const std::function<std::string(int)>& rowValue, bool highlightValue) const {
   const Rect cr = contentRect(rect);
   const int rowH = (rowSubtitle != nullptr) ? Lm::values.listWithSubtitleRowHeight : Lm::values.listRowHeight;
+  if (rowH <= 0 || cr.height <= 0) return;
   const int pageItems = std::max(1, cr.height / rowH);
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
 
@@ -851,6 +851,7 @@ void PulsrTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std
                                      bool& /*bufferRestored*/, std::function<bool()> storeCoverBuffer) const {
   const Rect cr = contentRect(rect);
   const int maxBooks = Lm::values.homeRecentBooksCount;
+  if (maxBooks <= 0 || cr.height <= 0) return;
   const int count = std::min(static_cast<int>(recentBooks.size()), maxBooks);
   const int rowH = cr.height / maxBooks;
 

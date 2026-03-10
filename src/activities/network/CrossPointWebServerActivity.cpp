@@ -315,7 +315,7 @@ void CrossPointWebServerActivity::loop() {
         const int pageW = renderer.getScreenWidth();
         if (prog.state == CrossPointWebServer::ClawUpdateState::DOWNLOADING) {
           renderer.clearScreen();
-          renderer.drawCenteredText(PULSR_10_FONT_ID, pageH / 2 - 40, "Downloading update...", true,
+          renderer.drawCenteredText(PULSR_10_FONT_ID, pageH / 2 - 40, tr(STR_DOWNLOADING), true,
                                     EpdFontFamily::BOLD);
           if (prog.total > 0) {
             const int pct = (int)(prog.downloaded * 100 / prog.total);
@@ -338,7 +338,7 @@ void CrossPointWebServerActivity::loop() {
           renderer.displayBuffer(HalDisplay::FAST_REFRESH);
         } else if (prog.state == CrossPointWebServer::ClawUpdateState::CHECKING) {
           renderer.clearScreen();
-          renderer.drawCenteredText(PULSR_10_FONT_ID, pageH / 2, "Checking for updates...", true, EpdFontFamily::BOLD);
+          renderer.drawCenteredText(PULSR_10_FONT_ID, pageH / 2, tr(STR_CHECKING_UPDATE), true, EpdFontFamily::BOLD);
           renderer.displayBuffer(HalDisplay::FAST_REFRESH);
         }
       }
