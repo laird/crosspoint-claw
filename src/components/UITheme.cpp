@@ -4,6 +4,8 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 
+#include <atomic>
+#include <cassert>
 #include <memory>
 
 #include "MappedInputManager.h"
@@ -19,15 +21,15 @@ constexpr int SKIP_PAGE_MS = 700;
 
 UITheme UITheme::instance;
 
-static bool s_networkConnected = false;
-static bool s_networkTransferring = false;
+static std::atomic<bool> s_networkConnected{false};
+static std::atomic<bool> s_networkTransferring{false};
 
 void UITheme::setNetworkStatus(bool connected, bool transferring) {
-  s_networkConnected = connected;
-  s_networkTransferring = transferring;
+  s_networkConnected.store(connected, std::memory_order_relaxed);
+  s_networkTransferring.store(transferring, std::memory_order_relaxed);
 }
-bool UITheme::isNetworkConnected() { return s_networkConnected; }
-bool UITheme::isNetworkTransferring() { return s_networkTransferring; }
+bool UITheme::isNetworkConnected() { return s_networkConnected.load(std::memory_order_relaxed); }
+bool UITheme::isNetworkTransferring() { return s_networkTransferring.load(std::memory_order_relaxed); }
 
 UITheme::UITheme() {
   auto themeType = static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme);
@@ -134,24 +136,33 @@ int UITheme::getProgressBarHeight() {
   return (showProgressBar ? (((SETTINGS.statusBarProgressBarThickness + 1) * 2) + metrics.progressBarMarginTop) : 0);
 }
 
-static bool s_httpServerActive = false;
-static bool s_wifiAutoConnecting = false;
+static std::atomic<bool> s_httpServerActive{false};
+static std::atomic<bool> s_wifiAutoConnecting{false};
 
-void UITheme::setHttpServerActive(bool active) { s_httpServerActive = active; }
-bool UITheme::isHttpServerActive() { return s_httpServerActive; }
-void UITheme::setWifiAutoConnecting(bool connecting) { s_wifiAutoConnecting = connecting; }
-bool UITheme::isWifiAutoConnecting() { return s_wifiAutoConnecting; }
+void UITheme::setHttpServerActive(bool active) { s_httpServerActive.store(active, std::memory_order_relaxed); }
+bool UITheme::isHttpServerActive() { return s_httpServerActive.load(std::memory_order_relaxed); }
+void UITheme::setWifiAutoConnecting(bool connecting) { s_wifiAutoConnecting.store(connecting, std::memory_order_relaxed); }
+bool UITheme::isWifiAutoConnecting() { return s_wifiAutoConnecting.load(std::memory_order_relaxed); }
 
 static std::vector<std::string> s_receivedFiles;
-static SemaphoreHandle_t s_receivedFilesMutex = xSemaphoreCreateMutex();
+static SemaphoreHandle_t s_receivedFilesMutex = nullptr;
+
+static void ensureReceivedFilesMutex() {
+  if (!s_receivedFilesMutex) {
+    s_receivedFilesMutex = xSemaphoreCreateMutex();
+    assert(s_receivedFilesMutex);
+  }
+}
 
 void UITheme::addReceivedFile(const std::string& name) {
+  ensureReceivedFilesMutex();
   xSemaphoreTake(s_receivedFilesMutex, portMAX_DELAY);
   s_receivedFiles.push_back(name);
   xSemaphoreGive(s_receivedFilesMutex);
 }
 
 std::vector<std::string> UITheme::getReceivedFiles() {
+  ensureReceivedFilesMutex();
   xSemaphoreTake(s_receivedFilesMutex, portMAX_DELAY);
   auto copy = s_receivedFiles;
   xSemaphoreGive(s_receivedFilesMutex);
@@ -159,6 +170,7 @@ std::vector<std::string> UITheme::getReceivedFiles() {
 }
 
 void UITheme::clearReceivedFiles() {
+  ensureReceivedFilesMutex();
   xSemaphoreTake(s_receivedFilesMutex, portMAX_DELAY);
   s_receivedFiles.clear();
   xSemaphoreGive(s_receivedFilesMutex);
