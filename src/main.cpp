@@ -6,6 +6,7 @@
 #include <HalGPIO.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
+#include <HalSystem.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <SPI.h>
@@ -227,6 +228,7 @@ void setupDisplayAndFonts() {
 void setup() {
   t1 = millis();
 
+  HalSystem::begin();
   gpio.begin();
   powerManager.begin();
 
@@ -248,6 +250,11 @@ void setup() {
     activityManager.goToFullScreenMessage("SD card error", EpdFontFamily::BOLD);
     return;
   }
+
+  // checkPanic() writes the crash report to SD and calls clearPanic() on success.
+  // Clearing is intentionally deferred until a confirmed write so the panic
+  // info persists across reboots if the SD card is unavailable.
+  HalSystem::checkPanic();
 
   SETTINGS.loadFromFile();
   I18N.loadSettings();
