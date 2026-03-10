@@ -410,7 +410,26 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const st
         if (ch > 0x7F) break;  // non-ASCII: stop (shortLabel should be used instead)
         abbrBuf[abbrLen++] = (ch >= 'a' && ch <= 'z') ? ch - 32 : ch;
       }
-      if (abbrBuf[0] == '\0') continue;  // no usable abbreviation; skip tab
+      if (abbrBuf[0] == '\0') {
+        // Non-ASCII label without shortLabel: copy whole UTF-8 codepoints
+        // up to 4 bytes total (avoids splitting multi-byte sequences).
+        abbrLen = 0;
+        int c = 0;
+        while (full[c] != '\0' && abbrLen < 4) {
+          unsigned char lead = static_cast<unsigned char>(full[c]);
+          int cpLen = 1;
+          if (lead >= 0xF0)
+            cpLen = 4;
+          else if (lead >= 0xE0)
+            cpLen = 3;
+          else if (lead >= 0xC0)
+            cpLen = 2;
+          if (abbrLen + cpLen > 4) break;  // won't fit without splitting
+          for (int b = 0; b < cpLen && full[c] != '\0'; b++) abbrBuf[abbrLen++] = full[c++];
+        }
+        abbrBuf[abbrLen] = '\0';
+        if (abbrBuf[0] == '\0') continue;
+      }
       abbr = abbrBuf;
     }
     // "Controls" → "CONT" is ambiguous; override to the universal abbreviation
