@@ -8,15 +8,20 @@
 #include "components/themes/BaseTheme.h"
 
 class UITheme {
-  // Static instance
-  static UITheme instance;
-
  public:
   UITheme();
-  static UITheme& getInstance() { return instance; }
+  static UITheme& getInstance();  // Meyers singleton - lazy initialization
+  
+  void ensureInitialized();  // Called on first use after settings loaded
 
-  const ThemeMetrics& getMetrics() const { return *currentMetrics; }
-  const BaseTheme& getTheme() const { return *currentTheme; }
+  const ThemeMetrics& getMetrics() const {
+    const_cast<UITheme*>(this)->ensureInitialized();
+    return *currentMetrics;
+  }
+  const BaseTheme& getTheme() const {
+    const_cast<UITheme*>(this)->ensureInitialized();
+    return *currentTheme;
+  }
   void reload();
   void setTheme(CrossPointSettings::UI_THEME type);
   static int getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader, bool hasTabBar, bool hasButtonHints,
