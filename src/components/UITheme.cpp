@@ -61,6 +61,11 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       currentTheme = std::make_unique<PulsrTheme>();
       currentMetrics = &PulsrMetrics::values;
       break;
+    default:
+      LOG_ERR("UI", "Unknown theme value %d, falling back to Classic", static_cast<int>(type));
+      currentTheme = std::make_unique<BaseTheme>();
+      currentMetrics = &BaseMetrics::values;
+      break;
   }
 }
 
