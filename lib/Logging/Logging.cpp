@@ -117,14 +117,17 @@ std::string getLastLogs() {
     return {};
   }
 
-  static portMUX_TYPE snapshotMux = portMUX_INITIALIZER_UNLOCKED;
-  portENTER_CRITICAL(&snapshotMux);
+  // Snapshot the ring buffer under logMux (ISR-safe spinlock). The snapshot
+  // is heap-allocated (done above) so we avoid 4KB on the stack. We only
+  // hold the spinlock for the memcpy — no heap work while interrupts are off.
   size_t snapHead = 0;
   portENTER_CRITICAL(&logMux);
   memcpy(snapshot, logMessages, MAX_LOG_LINES * MAX_ENTRY_LEN);
   snapHead = logHead;
   portEXIT_CRITICAL(&logMux);
 
+  // Build the output string outside any critical section so heap
+  // allocations (reserve, operator+=) don't run with interrupts disabled.
   std::string output;
   output.reserve(MAX_LOG_LINES * MAX_ENTRY_LEN);
   for (size_t i = 0; i < MAX_LOG_LINES; i++) {
@@ -133,7 +136,6 @@ std::string getLastLogs() {
       output += snapshot[idx];
     }
   }
-  portEXIT_CRITICAL(&snapshotMux);
   free(snapshot);
   return output;
 }
