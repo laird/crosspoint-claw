@@ -580,12 +580,12 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += drawCenteredWrapped(PULSR_10_FONT_ID, startY, tr(STR_OPEN_URL_HINT), true, EpdFontFamily::BOLD);
     startY += metrics.verticalSpacing;
 
+    std::string ipUrl = std::string("http://") + connectedIP + "/";
     std::string hostnameUrl = std::string("http://") + AP_HOSTNAME + ".local/";
-    std::string ipUrl = tr(STR_OR_HTTP_PREFIX) + connectedIP + "/";
 
-    // Show QR code for URL
+    // Show QR code for URL — use IP in AP mode (mDNS may not resolve), hostname otherwise
     const Rect qrBoundsUrl(contentLeft + (contentW - QR_CODE_WIDTH) / 2, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
-    QrUtils::drawQrCode(renderer, qrBoundsUrl, hostnameUrl);
+    QrUtils::drawQrCode(renderer, qrBoundsUrl, ipUrl);
     startY += QR_CODE_HEIGHT + metrics.verticalSpacing;
 
     const bool apTextBlack = !UITheme::isInverted();  // white text in dark mode

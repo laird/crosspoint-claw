@@ -200,7 +200,7 @@ void PulsrTheme::drawFrame(const GfxRenderer& renderer, const char* title) const
       if (UITheme::isHttpServerActive()) {
         // In dark mode: pulse White/White (solid) to avoid gray dither; light mode: original pulsing
         const Color httpColor = UITheme::isNetworkTransferring()
-                                    ? ((millis() / 600) % 2 == 0 ? Color::White : pillBg)
+                                    ? ((millis() / 600) % 2 == 0 ? Color::White : (inverted_ ? Color::Black : pillBg))
                                     : pillBg;
         renderer.fillRoundedRect(pillX, pillY, pillW, pillH, PILL_R, httpColor);
         const char* lbl = "HTTP";
@@ -470,7 +470,14 @@ void PulsrTheme::drawTabBar(const GfxRenderer& renderer, Rect /*rect*/, const st
         if (ch > 0x7F) break;  // non-ASCII: stop (shortLabel should be used instead)
         abbrBuf[abbrLen++] = (ch >= 'a' && ch <= 'z') ? ch - 32 : ch;
       }
-      if (abbrBuf[0] == '\0') continue;  // no usable abbreviation; skip tab
+      if (abbrBuf[0] == '\0') {
+        // Non-ASCII label without shortLabel: use first 4 bytes as fallback
+        abbrLen = 0;
+        for (int c = 0; full[c] != '\0' && abbrLen < 4; c++) {
+          abbrBuf[abbrLen++] = full[c];
+        }
+        if (abbrBuf[0] == '\0') continue;
+      }
       abbr = abbrBuf;
     }
     // "Controls" → "CONT" is ambiguous; override to the universal abbreviation

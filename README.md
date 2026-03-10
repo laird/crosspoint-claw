@@ -198,6 +198,6 @@ The Pulsr theme uses **Antonio** for all chrome elements (top bar, left nav bar,
 - **Font**: [Antonio](https://fonts.google.com/specimen/Antonio) by Vernon Adams
 - **License**: [SIL Open Font License 1.1](https://scripts.sil.org/OFL)
 - **IDs**: `PULSR_10_FONT_ID` (10pt), `PULSR_12_FONT_ID` (12pt)
-- **Source**: `lib/EpdFont/builtinFonts/antonio_10_regular.h`, `antonio_12_regular.h`
+- **Source**: `lib/EpdFont/builtinFonts/antonio_10_regular.h`, `lib/EpdFont/builtinFonts/antonio_12_regular.h`
 
 Antonio is a condensed sans-serif typeface designed for display use, well suited to the narrow left navigation bar of the Pulsr theme.
