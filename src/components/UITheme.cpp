@@ -19,7 +19,11 @@ namespace {
 constexpr int SKIP_PAGE_MS = 700;
 }  // namespace
 
-UITheme UITheme::instance;
+// Lazy initialization - delay theme creation until settings are loaded
+UITheme& UITheme::getInstance() {
+  static UITheme instance;
+  return instance;
+}
 
 static bool s_networkConnected = false;
 static bool s_networkTransferring = false;
@@ -54,9 +58,14 @@ bool UITheme::consumeReceivedFileDirty() {
   return d;
 }
 
-UITheme::UITheme() {
-  auto themeType = static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme);
-  setTheme(themeType);
+UITheme::UITheme() : currentTheme(nullptr), currentMetrics(nullptr) {
+  // Theme will be initialized on first use via reload()
+}
+
+void UITheme::ensureInitialized() {
+  if (!currentTheme) {
+    reload();
+  }
 }
 
 void UITheme::reload() {
