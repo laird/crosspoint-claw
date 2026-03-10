@@ -320,6 +320,10 @@ std::optional<uint16_t> Section::getPageForAnchor(const std::string& anchor) con
     serialization::readPod(f, page);
     if (key == anchor) {
       f.close();
+      if (page >= pageCount) {
+        LOG_ERR("SCT", "Anchor '%s' maps to page %d but section has %d pages", anchor.c_str(), page, pageCount);
+        return std::nullopt;
+      }
       return page;
     }
   }
