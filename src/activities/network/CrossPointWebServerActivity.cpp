@@ -81,6 +81,7 @@ void CrossPointWebServerActivity::onExit() {
 
   UITheme::setNetworkStatus(false, false);
   UITheme::setHttpServerActive(false);
+  UITheme::clearReceivedFiles();
   LOG_DBG("WEBACT", "Free heap at onExit start: %d bytes", ESP.getFreeHeap());
 
   state = WebServerActivityState::SHUTTING_DOWN;
