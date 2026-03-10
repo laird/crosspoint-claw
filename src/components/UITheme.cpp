@@ -13,7 +13,6 @@
 #include "components/themes/BaseTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
-#include "components/themes/pulsr/PulsrTheme.h"
 
 namespace {
 constexpr int SKIP_PAGE_MS = 700;
@@ -57,11 +56,6 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Lyra 3 Covers theme");
       currentTheme = std::make_unique<Lyra3CoversTheme>();
       currentMetrics = &Lyra3CoversMetrics::values;
-      break;
-    case CrossPointSettings::UI_THEME::PULSR:
-      LOG_DBG("UI", "Using PULSR theme");
-      currentTheme = std::make_unique<PulsrTheme>();
-      currentMetrics = &PulsrMetrics::values;
       break;
     default:
       LOG_ERR("UI", "Unknown theme value %d, falling back to Classic", static_cast<int>(type));
