@@ -105,16 +105,23 @@ std::string getLastLogs() {
     return {};
   }
 
-  // Snapshot message pointers outside the critical section to avoid heap
-  // allocation (std::string +=) while interrupts are disabled.
-  // Static allocation avoids consuming 4KB of task stack on embedded targets.
-  static char snapshot[MAX_LOG_LINES][MAX_ENTRY_LEN];
+  // Heap-allocate snapshot to avoid 4KB stack usage (16 * 256) which can
+  // overflow ESP32 task stacks (typically 4-8KB).
+  auto* snapshot = static_cast<char(*)[MAX_ENTRY_LEN]>(malloc(MAX_LOG_LINES * MAX_ENTRY_LEN));
+  if (!snapshot) {
+    return {};
+  }
+
+  // Snapshot the ring buffer under logMux (ISR-safe spinlock). We only
+  // hold the spinlock for the memcpy — no heap work while interrupts are off.
   size_t snapHead = 0;
   portENTER_CRITICAL(&logMux);
-  memcpy(snapshot, logMessages, sizeof(snapshot));
+  memcpy(snapshot, logMessages, MAX_LOG_LINES * MAX_ENTRY_LEN);
   snapHead = logHead;
   portEXIT_CRITICAL(&logMux);
 
+  // Build the output string outside any critical section so heap
+  // allocations (reserve, operator+=) don't run with interrupts disabled.
   std::string output;
   output.reserve(MAX_LOG_LINES * MAX_ENTRY_LEN);
   for (size_t i = 0; i < MAX_LOG_LINES; i++) {
@@ -123,6 +130,7 @@ std::string getLastLogs() {
       output += snapshot[idx];
     }
   }
+  free(snapshot);
   return output;
 }
 

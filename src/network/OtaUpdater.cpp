@@ -296,6 +296,11 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(std::function<void()> onPr
   // call forceSetBootPartitionOta() after the download, bypassing the
   // image validation in esp_https_ota_finish() that fails for unsigned builds.
   const esp_partition_t* updatePart = esp_ota_get_next_update_partition(nullptr);
+  if (!updatePart) {
+    LOG_ERR("OTA", "No valid OTA update partition found");
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+    return INTERNAL_UPDATE_ERROR;
+  }
 
   esp_err = esp_https_ota_begin(&ota_config, &ota_handle);
   if (esp_err != ESP_OK) {
