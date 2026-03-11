@@ -20,7 +20,7 @@ See docs/rss-content-feeds.md for the full content model and integration guide.
 
 import argparse
 import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from datetime import datetime, timezone
 import json
@@ -34,13 +34,22 @@ DEFAULT_FEED_TITLE = os.environ.get("FEED_TITLE", "CrossPoint Content Feed")
 
 # --- Content rules: map subdirectory -> feed item type + reader destination path ---
 CONTENT_RULES = [
-    {"dir": "books/chip",   "ext": ".epub", "type": "file",     "path": "/Books/chip/"},
-    {"dir": "books/erotic", "ext": ".epub", "type": "file",     "path": "/Books/erotic/"},
-    {"dir": "thought",      "ext": ".epub", "type": "file",     "path": "/Thought/"},
-    {"dir": "trips",        "ext": ".epub", "type": "file",     "path": "/trips/"},
-    {"dir": "sleep",        "ext": ".bmp",  "type": "image",    "path": "/sleep/"},
-    {"dir": "news",         "ext": ".json", "type": "news",     "path": None},
-    {"dir": "firmware",     "ext": ".bin",  "type": "firmware", "path": None},
+    {"dir": "books/chip",   "ext": ".epub", "type": "file",     "path": "/Books/chip/",   "recursive": False},
+    {"dir": "books/erotic", "ext": ".epub", "type": "file",     "path": "/Books/erotic/", "recursive": False},
+    {"dir": "books/SCP",    "ext": ".epub", "type": "file",     "path": "/Books/SCP/",    "recursive": True},
+    {"dir": "thought",      "ext": ".epub", "type": "file",     "path": "/Thought/",      "recursive": False},
+    {"dir": "trips",        "ext": ".epub", "type": "file",     "path": "/trips/",        "recursive": False},
+    {"dir": "sleep",        "ext": ".bmp",  "type": "image",    "path": "/sleep/",        "recursive": False},
+    {"dir": "news",         "ext": ".json", "type": "news",     "path": None,             "recursive": False},
+    {"dir": "firmware",     "ext": ".bin",  "type": "firmware", "path": None,             "recursive": False},
+]
+
+# Cover thumbnail rules — auto-generated from .covers/ subdirectories alongside books
+COVER_RULES = [
+    {"books_dir": "books/chip",                 "reader_path": "/Books/chip/"},
+    {"books_dir": "books/erotic",               "reader_path": "/Books/erotic/"},
+    {"books_dir": "books/SCP",                  "reader_path": "/Books/SCP/"},
+    {"books_dir": "books",                      "reader_path": "/Books/"},
 ]
 
 
@@ -108,11 +117,24 @@ def build_feed(content_dir: Path, feed_url: str, feed_title: str) -> str:
         else:
             mime = "application/epub+zip" if rule["ext"] == ".epub" else "image/bmp"
             subdir = rule["dir"]
-            dest_path = rule["path"]
-            for f in sorted(content_path.glob(f"*{rule['ext']}")):
+            base_dest_path = rule["path"]
+            recursive = rule.get("recursive", False)
+            pattern = f"**/*{rule['ext']}" if recursive else f"*{rule['ext']}"
+            for f in sorted(content_path.glob(pattern)):
+                # Skip files inside .covers/ directories
+                if ".covers" in f.parts:
+                    continue
                 mtime = f.stat().st_mtime
                 dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
-                url = f"{feed_url}/content/{subdir}/{f.name}"
+                # For recursive rules, preserve subdirectory structure
+                if recursive:
+                    rel = f.relative_to(content_path)
+                    url = f"{feed_url}/content/{subdir}/{rel}"
+                    subdir_part = str(rel.parent) if str(rel.parent) != "." else ""
+                    dest_path = base_dest_path + (subdir_part + "/" if subdir_part else "")
+                else:
+                    url = f"{feed_url}/content/{subdir}/{f.name}"
+                    dest_path = base_dest_path
                 title = escape_xml(f.stem.replace("-", " ").replace("_", " ").title())
                 dated.append((mtime, f"""
     <item>
@@ -122,6 +144,36 @@ def build_feed(content_dir: Path, feed_url: str, feed_title: str) -> str:
       <enclosure url="{escape_xml(url)}" type="{mime}" length="{f.stat().st_size}"/>
       <pubDate>{fmt_date(dt)}</pubDate>
       <guid>{escape_xml(file_guid(f))}</guid>
+    </item>"""))
+
+    # Cover thumbnails — serve .covers/*.bmp alongside books
+    for rule in COVER_RULES:
+        books_path = content_dir / rule["books_dir"]
+        if not books_path.exists():
+            continue
+        for covers_dir in sorted(books_path.rglob(".covers")):
+            if not covers_dir.is_dir():
+                continue
+            # Compute reader destination: replace content_dir/books_dir prefix with reader_path
+            rel_to_books = covers_dir.parent.relative_to(books_path)
+            if str(rel_to_books) == ".":
+                reader_covers_path = rule["reader_path"] + ".covers/"
+            else:
+                reader_covers_path = rule["reader_path"] + str(rel_to_books) + "/.covers/"
+            subdir_key = str(covers_dir.relative_to(content_dir))
+            for f in sorted(covers_dir.glob("*.bmp")):
+                mtime = f.stat().st_mtime
+                dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
+                url = f"{feed_url}/content/{subdir_key}/{f.name}"
+                title = escape_xml(f.stem)
+                dated.append((mtime, f"""
+    <item>
+      <title>{title}</title>
+      <crosspoint:type>file</crosspoint:type>
+      <crosspoint:path>{reader_covers_path}</crosspoint:path>
+      <enclosure url="{escape_xml(url)}" type="image/bmp" length="{f.stat().st_size}"/>
+      <pubDate>{fmt_date(dt)}</pubDate>
+      <guid>cover-{escape_xml(file_guid(f))}</guid>
     </item>"""))
 
     # Firmware items always first, then everything else newest-first
@@ -236,7 +288,7 @@ def main():
 
     handler = make_handler(content_dir, feed_url, args.feed_title, args.access_log,
                            reader_feed_file=args.reader_feed)
-    HTTPServer((args.host, args.port), handler).serve_forever()
+    ThreadingHTTPServer((args.host, args.port), handler).serve_forever()
 
 
 if __name__ == "__main__":

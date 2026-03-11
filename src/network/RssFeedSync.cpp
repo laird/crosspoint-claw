@@ -454,10 +454,23 @@ void syncTask(void*) {
 
   LOG_INF(TAG, "Free heap before fetch: %lu bytes", (unsigned long)ESP.getFreeHeap());
 
-  // 1+3. Fetch AND process items simultaneously via SAX callback.
-  //      Items are processed as each </item> is parsed — no vector accumulation.
-  //      The parser calls our callback inline during the fetch loop.
-  //      Feed is newest-first; we stop once we hit items older than lastSync.
+  // Phase 1: Fetch and parse the RSS feed, collecting items that need processing.
+  //          Downloads are DEFERRED to Phase 2 to avoid nested HTTP connections —
+  //          the feed server may be single-threaded (Python HTTPServer) and can't
+  //          serve a file download while the feed response is still being streamed.
+  //          News items are processed inline (no HTTP needed).
+  struct DeferredDownload {
+    std::string url;
+    std::string destPath;
+    std::string guid;
+    std::string title;
+    uint32_t enclosureLength;
+    uint32_t itemTime;
+    bool isFirmware;
+  };
+  std::vector<DeferredDownload> downloads;
+  downloads.reserve(16);
+
   bool reachedOldItems = false;
   RssParser rssParser;
   rssParser.setItemCallback([&](const RssItem& item) {
@@ -481,7 +494,6 @@ void syncTask(void*) {
     LOG_INF(TAG, "Item: type=%s guid=%s", type.c_str(), item.guid.c_str());
 
     if (type == "file" || type == "image") {
-      setState(RssFeedSync::State::DOWNLOADING);  // switch indicator as soon as first download starts
       if (item.enclosureUrl.empty() || item.crosspointPath.empty()) {
         LOG_DBG(TAG, "Skipping %s item '%s': missing enclosure/path", type.c_str(), item.guid.c_str());
         return;
@@ -508,21 +520,7 @@ void syncTask(void*) {
         LOG_INF(TAG, "Re-download (size %u != expected %u): %s", static_cast<unsigned>(existingSize),
                 static_cast<unsigned>(item.enclosureLength), destPath.c_str());
       }
-      ensureParentDir(destPath);
-      if (HttpDownloader::downloadToFile(item.enclosureUrl, destPath) != HttpDownloader::OK) {
-        LOG_ERR(TAG, "Download failed: %s -> %s", item.enclosureUrl.c_str(), destPath.c_str());
-        return;
-      }
-      s_dlCurrent++;
-      LOG_INF(TAG, "Downloaded [%d]: %s (heap: %lu)", s_dlCurrent, destPath.c_str(), (unsigned long)ESP.getFreeHeap());
-      const auto slash = destPath.rfind('/');
-      UITheme::addReceivedFile(slash == std::string::npos ? destPath : destPath.substr(slash + 1));
-      // Append to manifest so Browse → Feed virtual folder surfaces this file
-      if (manifestFile.isOpen()) {
-        manifestFile.print(destPath.c_str());
-        manifestFile.print("\n");
-        manifestFile.flush();
-      }
+      downloads.push_back({item.enclosureUrl, std::move(destPath), item.guid, item.title, item.enclosureLength, itemTime, false});
 
     } else if (type == "firmware") {
       if (SETTINGS.feedAllowFirmware == 0) {
@@ -534,8 +532,6 @@ void syncTask(void*) {
         return;
       }
       // Skip if this firmware GUID references the currently running build (prevents flash loops).
-      // Feed GUID is "firmware-{sha}" (e.g. "firmware-00430dd"); CROSSPOINT_GIT_SHA is the short
-      // SHA baked in at compile time.  If the GUID contains our SHA, we're already running it.
       if (strstr(item.guid.c_str(), CROSSPOINT_GIT_SHA) != nullptr) {
         LOG_INF(TAG, "Skip firmware: GUID %s matches running SHA " CROSSPOINT_GIT_SHA, item.guid.c_str());
         if (itemTime > 0) oldestSuccess = itemTime;
@@ -552,36 +548,21 @@ void syncTask(void*) {
           return;
         }
       }
-      if (HttpDownloader::downloadToFile(item.enclosureUrl, "/firmware.bin") != HttpDownloader::OK) {
-        LOG_ERR(TAG, "Firmware download failed: %s", item.enclosureUrl.c_str());
-        Storage.remove("/firmware.bin");  // Delete any partial download — prevent flash loop
-        return;
-      }
-      LOG_DBG(TAG, "Firmware downloaded — will apply on next boot");
-      if (SETTINGS.dangerZoneEnabled) {
-        // Persist the current watermark NOW before reboot — new firmware reads this file on
-        // first boot so it doesn't re-download the entire feed (SD card survives OTA flash).
-        if (itemTime > lastSync) saveLastSyncTime(itemTime);
-        LOG_DBG(TAG, "Danger Zone enabled — auto-triggering flash");
-        dzFlashRequested = true;
-      }
+      downloads.push_back({item.enclosureUrl, "/firmware.bin", item.guid, item.title, item.enclosureLength, itemTime, true});
 
     } else if (type == "news") {
       prependNewsEntry(item);
       LOG_DBG(TAG, "Added news: %s", item.title.c_str());
+      if (itemTime > 0) oldestSuccess = itemTime;
 
     } else {
       LOG_DBG(TAG, "Unknown item type '%s' for guid '%s', skipping", type.c_str(), item.guid.c_str());
       return;
     }
-
-    // Track oldest successfully processed item (feed is newest-first, so this
-    // keeps getting overwritten with progressively older timestamps).
-    const uint32_t t = parseRfc2822(item.pubDate);
-    if (t > 0) oldestSuccess = t;
   });
 
-  // Now fetch — the callback fires for each item as it is parsed during the fetch.
+  // Fetch the feed — the callback fires for each item as it is parsed during the fetch.
+  // No HTTP downloads happen during this phase; items are collected into `downloads`.
   {
     RssParserStream stream(rssParser);
     LOG_INF(TAG, "Starting feed fetch...");
@@ -611,7 +592,52 @@ void syncTask(void*) {
     return;
   }
 
-  // Save watermark after fetch+parse fully complete.
+  // Phase 2: Download collected items now that the feed HTTP connection is closed.
+  //          This avoids nested HTTP connections that deadlock single-threaded servers.
+  if (!downloads.empty()) {
+    setState(RssFeedSync::State::DOWNLOADING);
+    s_dlTotal = static_cast<int>(downloads.size());
+    LOG_INF(TAG, "Downloading %d items...", s_dlTotal);
+  }
+
+  for (const auto& dl : downloads) {
+    if (dl.isFirmware) {
+      ensureParentDir(dl.destPath);
+      if (HttpDownloader::downloadToFile(dl.url, dl.destPath) != HttpDownloader::OK) {
+        LOG_ERR(TAG, "Firmware download failed: %s", dl.url.c_str());
+        Storage.remove("/firmware.bin");  // Delete any partial download — prevent flash loop
+        continue;
+      }
+      LOG_DBG(TAG, "Firmware downloaded — will apply on next boot");
+      if (SETTINGS.dangerZoneEnabled) {
+        // Persist the current watermark NOW before reboot — new firmware reads this file on
+        // first boot so it doesn't re-download the entire feed (SD card survives OTA flash).
+        if (dl.itemTime > lastSync) saveLastSyncTime(dl.itemTime);
+        LOG_DBG(TAG, "Danger Zone enabled — auto-triggering flash");
+        dzFlashRequested = true;
+      }
+    } else {
+      ensureParentDir(dl.destPath);
+      if (HttpDownloader::downloadToFile(dl.url, dl.destPath) != HttpDownloader::OK) {
+        LOG_ERR(TAG, "Download failed: %s -> %s", dl.url.c_str(), dl.destPath.c_str());
+        continue;
+      }
+      const auto slash = dl.destPath.rfind('/');
+      UITheme::addReceivedFile(slash == std::string::npos ? dl.destPath : dl.destPath.substr(slash + 1));
+      // Append to manifest so Browse → Feed virtual folder surfaces this file
+      if (manifestFile.isOpen()) {
+        manifestFile.print(dl.destPath.c_str());
+        manifestFile.print("\n");
+        manifestFile.flush();
+      }
+    }
+    s_dlCurrent++;
+    LOG_INF(TAG, "Downloaded [%d/%d]: %s (heap: %lu)", s_dlCurrent, s_dlTotal, dl.destPath.c_str(),
+            (unsigned long)ESP.getFreeHeap());
+    if (dl.itemTime > 0) oldestSuccess = dl.itemTime;
+  }
+
+  // Save watermark after all downloads complete.
   // oldestSuccess = timestamp of oldest item we processed this run.
   if (oldestSuccess > lastSync) saveLastSyncTime(oldestSuccess);
 
