@@ -1,7 +1,8 @@
 #pragma once
-
 #include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "CrossPointSettings.h"
 #include "components/themes/BaseTheme.h"
@@ -21,9 +22,21 @@ class UITheme {
   static int getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader, bool hasTabBar, bool hasButtonHints,
                                      bool hasSubtitle);
   static std::string getCoverThumbPath(std::string coverBmpPath, int coverHeight);
-  static UIIcon getFileIcon(std::string filename);
+  static UIIcon getFileIcon(const std::string& filename);
   static int getStatusBarHeight();
   static int getProgressBarHeight();
+
+  // Network connectivity status — used by themes to draw indicators (e.g. PULSR left-bar segment).
+  static void setNetworkStatus(bool connected, bool transferring);
+  static bool isNetworkConnected();
+  static bool isNetworkTransferring();
+  static void setHttpServerActive(bool active);
+  static bool isHttpServerActive();
+  static void setWifiAutoConnecting(bool connecting);
+  static bool isWifiAutoConnecting();
+  static void addReceivedFile(const std::string& name);
+  static std::vector<std::string> getReceivedFiles();
+  static void clearReceivedFiles();
 
  private:
   const ThemeMetrics* currentMetrics;
