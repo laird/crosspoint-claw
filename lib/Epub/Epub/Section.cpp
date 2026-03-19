@@ -10,6 +10,10 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
+// IMPORTANT: Keep SECTION_FILE_VERSION in sync with writeSectionFileHeader() and deserialize()
+// Increment this version whenever the header format changes (new fields added/removed/reordered)
+// Version 16: Initial format
+// Version 17: Added imageRendering (uint8_t) parameter to header
 constexpr uint8_t SECTION_FILE_VERSION = 17;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(uint8_t) +
                                  sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(bool) + sizeof(bool) +

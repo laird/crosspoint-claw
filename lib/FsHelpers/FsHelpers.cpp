@@ -43,6 +43,11 @@ std::string normalisePath(const std::string& path) {
 }
 
 bool checkFileExtension(std::string_view fileName, const char* extension) {
+  // Guard against NULL extension pointer
+  if (!extension) {
+    return false;
+  }
+
   const size_t extLen = strlen(extension);
   if (fileName.length() < extLen) {
     return false;
