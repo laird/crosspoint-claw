@@ -1,5 +1,10 @@
 #include "CrossPointWebServer.h"
 
+// Stub — full implementation in feature/claw (DZ firmware update progress).
+CrossPointWebServer::ClawUpdateProgress CrossPointWebServer::getClawUpdateProgress() {
+  return {};
+}
+
 #include <ArduinoJson.h>
 #include <Epub.h>
 #include <FsHelpers.h>
@@ -16,7 +21,6 @@
 #include "html/FilesPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
-#include "util/StringUtils.h"
 
 namespace {
 // Folders/files to hide from the web interface file browser
@@ -44,7 +48,7 @@ unsigned long wsLastCompleteAt = 0;
 // Helper function to clear epub cache after upload
 void clearEpubCacheIfNeeded(const String& filePath) {
   // Only clear cache for .epub files
-  if (StringUtils::checkFileExtension(filePath, ".epub")) {
+  if (FsHelpers::hasEpubExtension(filePath)) {
     Epub(filePath.c_str(), "/.crosspoint").clearCache();
     LOG_DBG("WEB", "Cleared epub cache for: %s", filePath.c_str());
   }
@@ -391,11 +395,7 @@ void CrossPointWebServer::scanFiles(const char* path, const std::function<void(F
   root.close();
 }
 
-bool CrossPointWebServer::isEpubFile(const String& filename) const {
-  String lower = filename;
-  lower.toLowerCase();
-  return lower.endsWith(".epub");
-}
+bool CrossPointWebServer::isEpubFile(const String& filename) const { return FsHelpers::hasEpubExtension(filename); }
 
 void CrossPointWebServer::handleFileList() const {
   sendHtmlContent(server.get(), FilesPageHtml, sizeof(FilesPageHtml));
@@ -669,6 +669,11 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
         if (!filePath.endsWith("/")) filePath += "/";
         filePath += state.fileName;
         clearEpubCacheIfNeeded(filePath);
+
+        // Update completion tracking so activity loop can display the filename
+        wsLastCompleteName = state.fileName;
+        wsLastCompleteSize = state.size;
+        wsLastCompleteAt = millis();
       }
     }
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
