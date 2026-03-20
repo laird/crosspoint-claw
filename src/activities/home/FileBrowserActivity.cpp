@@ -285,11 +285,12 @@ void FileBrowserActivity::loop() {
   }
 
   // PageForward cycles to next sort mode
+  bool pageButtonPressed = false;
   if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
     currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 3);
     applySortMode();
     requestUpdate();
-    return;
+    pageButtonPressed = true;
   }
 
   // PageBack cycles to previous sort mode
@@ -297,29 +298,32 @@ void FileBrowserActivity::loop() {
     currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 2) % 3);
     applySortMode();
     requestUpdate();
-    return;
+    pageButtonPressed = true;
   }
 
-  int listSize = static_cast<int>(files.size());
-  buttonNavigator.onNextRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
-    requestUpdate();
-  });
+  // Only handle list navigation if page buttons weren't pressed
+  if (!pageButtonPressed) {
+    int listSize = static_cast<int>(files.size());
+    buttonNavigator.onNextRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
 
-  buttonNavigator.onPreviousRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
-    requestUpdate();
-  });
+    buttonNavigator.onPreviousRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
 
-  buttonNavigator.onNextContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+    buttonNavigator.onNextContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
 
-  buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+    buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
+  }
 }
 
 std::string getFileName(std::string filename) {
