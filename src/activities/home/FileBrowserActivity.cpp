@@ -284,14 +284,16 @@ void FileBrowserActivity::loop() {
     }
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+  // PageForward cycles to next sort mode
+  if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
     currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 3);
     applySortMode();
     requestUpdate();
     return;
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Left)) {
+  // PageBack cycles to previous sort mode
+  if (mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
     currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 2) % 3);
     applySortMode();
     requestUpdate();
