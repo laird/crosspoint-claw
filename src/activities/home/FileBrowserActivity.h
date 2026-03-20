@@ -9,6 +9,9 @@
 #include "util/ButtonNavigator.h"
 
 class FileBrowserActivity final : public Activity {
+ public:
+  enum SortMode { SORT_ALPHABETICAL, SORT_RECENT_RECEIVED, SORT_RECENT_READ };
+
  private:
   // Deletion
   void clearFileMetadata(const std::string& fullPath);
@@ -16,6 +19,7 @@ class FileBrowserActivity final : public Activity {
   ButtonNavigator buttonNavigator;
 
   size_t selectorIndex = 0;
+  SortMode currentSortMode = SORT_ALPHABETICAL;
 
   // Files state
   std::string basepath = "/";
@@ -24,6 +28,10 @@ class FileBrowserActivity final : public Activity {
   // Data loading
   void loadFiles();
   size_t findEntry(const std::string& name) const;
+
+  // Sorting
+  void applySortMode();
+  static const char* getSortModeLabel(SortMode mode);
 
  public:
   explicit FileBrowserActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string initialPath = "/")

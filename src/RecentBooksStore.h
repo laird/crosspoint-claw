@@ -1,4 +1,5 @@
 #pragma once
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -7,6 +8,7 @@ struct RecentBook {
   std::string title;
   std::string author;
   std::string coverBmpPath;
+  time_t lastReadTime = 0;
 
   bool operator==(const RecentBook& other) const { return path == other.path; }
 };
@@ -47,6 +49,9 @@ class RecentBooksStore {
 
   bool loadFromFile();
   RecentBook getDataFromBook(std::string path) const;
+
+  // Returns lastReadTime for the book at the given path, or 0 if not found.
+  time_t getLastReadTime(const std::string& path) const;
 
  private:
   bool loadFromBinaryFile();
