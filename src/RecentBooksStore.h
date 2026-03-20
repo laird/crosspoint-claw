@@ -3,12 +3,16 @@
 #include <string>
 #include <vector>
 
+/// Metadata for a recently-opened book stored in RecentBooksStore.
+///
+/// Tracks essential book metadata (path, title, author, cover) plus the timestamp
+/// of when the book was last opened. Used for sorting file browser by read recency.
 struct RecentBook {
-  std::string path;
-  std::string title;
-  std::string author;
-  std::string coverBmpPath;
-  time_t lastReadTime = 0;
+  std::string path;            ///< Full path to the book file (e.g., "/Books/chip/story.epub")
+  std::string title;           ///< Book title (extracted from EPUB metadata)
+  std::string author;          ///< Author name (extracted from EPUB metadata)
+  std::string coverBmpPath;    ///< Path to cached cover image (BMP format)
+  time_t lastReadTime = 0;     ///< Unix timestamp of last open (0 if never read)
 
   bool operator==(const RecentBook& other) const { return path == other.path; }
 };
@@ -50,7 +54,14 @@ class RecentBooksStore {
   bool loadFromFile();
   RecentBook getDataFromBook(std::string path) const;
 
-  // Returns lastReadTime for the book at the given path, or 0 if not found.
+  /// Retrieves the last-read timestamp for the book at the given path.
+  ///
+  /// Searches the recent books list for a book matching the provided path
+  /// and returns its lastReadTime (Unix timestamp). If the book is not found
+  /// in the recent list, returns 0 (never read).
+  ///
+  /// @param path Full path to the book file (e.g., "/Books/chip/story.epub")
+  /// @return Unix timestamp of last read (time_t), or 0 if not found
   time_t getLastReadTime(const std::string& path) const;
 
  private:
