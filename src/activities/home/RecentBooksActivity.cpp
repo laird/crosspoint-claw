@@ -39,6 +39,8 @@ void RecentBooksActivity::loadRecentBooks() {
 
 const char* RecentBooksActivity::getSortModeLabel(SortMode mode) {
   switch (mode) {
+    case SORT_UNREAD:
+      return "Unread";
     case SORT_READ:
       return tr(STR_SORT_RECENT_READ);
     case SORT_LOAD:
@@ -46,12 +48,23 @@ const char* RecentBooksActivity::getSortModeLabel(SortMode mode) {
     case SORT_ALPHABETICAL:
       return tr(STR_SORT_NAME);
     default:
-      return tr(STR_SORT_RECENT_READ);
+      return "Unread";
   }
 }
 
 void RecentBooksActivity::applySortMode() {
   switch (currentSortMode) {
+    case SORT_UNREAD:
+      // Sort unread books first (lastReadTime == 0), then by load order
+      std::stable_sort(recentBooks.begin(), recentBooks.end(),
+                       [](const RecentBook& a, const RecentBook& b) {
+                         // Unread (0) sorts before read (>0)
+                         bool a_unread = (a.lastReadTime == 0);
+                         bool b_unread = (b.lastReadTime == 0);
+                         return a_unread > b_unread;  // true > false, so unread first
+                       });
+      break;
+
     case SORT_READ:
       // Sort by lastReadTime (newest first)
       std::sort(recentBooks.begin(), recentBooks.end(),
@@ -102,18 +115,18 @@ void RecentBooksActivity::loop() {
     onGoHome();
   }
 
-  // PageBack cycles to previous sort mode (READ → LOAD → A-Z → READ)
+  // PageBack cycles to previous sort mode (UNREAD → LOAD → READ → ALPHABETICAL → UNREAD)
   bool pageButtonPressed = false;
   if (mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
-    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 2) % 3);
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 3) % 4);
     applySortMode();
     requestUpdate();
     pageButtonPressed = true;
   }
 
-  // PageForward cycles to next sort mode (READ → A-Z → LOAD → READ)
+  // PageForward cycles to next sort mode (UNREAD → READ → LOAD → ALPHABETICAL → UNREAD)
   if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
-    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 3);
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 4);
     applySortMode();
     requestUpdate();
     pageButtonPressed = true;
