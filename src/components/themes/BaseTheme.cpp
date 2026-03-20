@@ -116,7 +116,7 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
 
   // Calculate vertical centering based on font height
   const int fontHeight = renderer.getLineHeight(PULSR_10_FONT_ID);
-  const int textYOffset = (buttonHeight - fontHeight) / 2 + fontHeight;  // Center text vertically
+  const int textYOffset = (buttonHeight - fontHeight) / 2;  // Center text vertically (top of text)
 
   // Clear the entire button bar area first to prevent ghosting of previously drawn buttons
   renderer.fillRect(0, pageHeight - buttonY, renderer.getScreenWidth(), buttonHeight, false);
