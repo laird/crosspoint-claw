@@ -18,6 +18,7 @@ class FileBrowserActivity final : public Activity {
   ///
   /// Use Left/Right buttons to cycle through modes. Directories always sort first.
   enum SortMode { SORT_ALPHABETICAL, SORT_RECENT_RECEIVED, SORT_RECENT_READ };
+  static constexpr int SORT_MODE_COUNT = 3;
 
  private:
   // Deletion

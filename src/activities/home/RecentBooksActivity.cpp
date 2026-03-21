@@ -40,7 +40,7 @@ void RecentBooksActivity::loadRecentBooks() {
 const char* RecentBooksActivity::getSortModeLabel(SortMode mode) {
   switch (mode) {
     case SORT_UNREAD:
-      return "Unread";
+      return tr(STR_SORT_UNREAD);
     case SORT_READ:
       return tr(STR_SORT_RECENT_READ);
     case SORT_LOAD:
@@ -48,7 +48,7 @@ const char* RecentBooksActivity::getSortModeLabel(SortMode mode) {
     case SORT_ALPHABETICAL:
       return tr(STR_SORT_NAME);
     default:
-      return "Unread";
+      return tr(STR_SORT_UNREAD);
   }
 }
 
@@ -181,8 +181,8 @@ void RecentBooksActivity::render(RenderLock&&) {
   }
 
   // Help text — show sort mode labels on side buttons
-  const SortMode prevMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 2) % 3);
-  const SortMode nextMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 3);
+  const SortMode prevMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 3) % 4);
+  const SortMode nextMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 4);
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_OPEN), getSortModeLabel(prevMode),
                                             getSortModeLabel(nextMode));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

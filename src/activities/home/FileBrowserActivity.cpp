@@ -287,7 +287,7 @@ void FileBrowserActivity::loop() {
   // PageForward cycles to next sort mode
   bool pageButtonPressed = false;
   if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
-    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 3);
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % SORT_MODE_COUNT);
     applySortMode();
     requestUpdate();
     pageButtonPressed = true;
@@ -295,7 +295,7 @@ void FileBrowserActivity::loop() {
 
   // PageBack cycles to previous sort mode
   if (mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
-    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 2) % 3);
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + SORT_MODE_COUNT - 1) % SORT_MODE_COUNT);
     applySortMode();
     requestUpdate();
     pageButtonPressed = true;
