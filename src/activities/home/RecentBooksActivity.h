@@ -10,16 +10,27 @@
 #include "util/ButtonNavigator.h"
 
 class RecentBooksActivity final : public Activity {
+ public:
+  /// Sort modes for recent books display.
+  /// UNREAD: Books never opened first (lastReadTime == 0), then by load order
+  /// READ: Most recently opened books first
+  /// LOAD: Most recently synced to reader first
+  /// ALPHABETICAL: A-Z alphabetical order
+  enum SortMode { SORT_UNREAD, SORT_READ, SORT_LOAD, SORT_ALPHABETICAL };
+
  private:
   ButtonNavigator buttonNavigator;
 
   size_t selectorIndex = 0;
+  SortMode currentSortMode = SORT_UNREAD;  // Default: unread books first
 
   // Recent tab state
   std::vector<RecentBook> recentBooks;
 
-  // Data loading
+  // Data loading and sorting
   void loadRecentBooks();
+  void applySortMode();
+  static const char* getSortModeLabel(SortMode mode);
 
  public:
   explicit RecentBooksActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

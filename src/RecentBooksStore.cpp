@@ -30,7 +30,7 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
   }
 
   // Add to front
-  recentBooks.insert(recentBooks.begin(), {path, title, author, coverBmpPath});
+  recentBooks.insert(recentBooks.begin(), {path, title, author, coverBmpPath, time(nullptr)});
 
   // Trim to max size
   if (recentBooks.size() > MAX_RECENT_BOOKS) {
@@ -49,8 +49,16 @@ void RecentBooksStore::updateBook(const std::string& path, const std::string& ti
     book.title = title;
     book.author = author;
     book.coverBmpPath = coverBmpPath;
+    book.lastReadTime = time(nullptr);
     saveToFile();
   }
+}
+
+time_t RecentBooksStore::getLastReadTime(const std::string& path) const {
+  for (const auto& book : recentBooks) {
+    if (book.path == path) return book.lastReadTime;
+  }
+  return 0;
 }
 
 bool RecentBooksStore::saveToFile() const {

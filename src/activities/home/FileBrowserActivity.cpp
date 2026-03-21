@@ -7,6 +7,7 @@
 #include <I18n.h>
 
 #include <algorithm>
+#include <utility>
 
 #include "../browser/CoverBrowserActivity.h"
 #include "MappedInputManager.h"
@@ -69,6 +70,88 @@ void sortFileList(std::vector<std::string>& strs) {
   });
 }
 
+const char* FileBrowserActivity::getSortModeLabel(SortMode mode) {
+  switch (mode) {
+    case SORT_ALPHABETICAL: return tr(STR_SORT_NAME);
+    case SORT_RECENT_RECEIVED: return tr(STR_SORT_DATE);
+    case SORT_RECENT_READ: return tr(STR_SORT_RECENT_READ);
+    default: return tr(STR_SORT_NAME);
+  }
+}
+
+void FileBrowserActivity::applySortMode() {
+  switch (currentSortMode) {
+    case SORT_ALPHABETICAL:
+      sortFileList(files);
+      break;
+
+    case SORT_RECENT_RECEIVED: {
+      std::string prefix = basepath;
+      if (prefix.back() != '/') prefix += '/';
+
+      std::vector<std::pair<uint32_t, std::string>> withTimes;
+      withTimes.reserve(files.size());
+
+      for (const auto& name : files) {
+        uint32_t fatTime = 0;
+        if (name.back() != '/') {
+          HalFile f = Storage.open((prefix + name).c_str());
+          if (f) {
+            uint16_t pdate = 0, ptime = 0;
+            f.getModifyDateTime(&pdate, &ptime);
+            f.close();
+            fatTime = ((uint32_t)pdate << 16) | ptime;
+          }
+        }
+        withTimes.emplace_back(fatTime, name);
+      }
+
+      std::sort(withTimes.begin(), withTimes.end(), [](const std::pair<uint32_t, std::string>& a,
+                                                       const std::pair<uint32_t, std::string>& b) {
+        bool isDir_a = a.second.back() == '/';
+        bool isDir_b = b.second.back() == '/';
+        if (isDir_a != isDir_b) return isDir_a;
+        return a.first > b.first;
+      });
+
+      files.clear();
+      files.reserve(withTimes.size());
+      for (auto& entry : withTimes) files.push_back(std::move(entry.second));
+      break;
+    }
+
+    case SORT_RECENT_READ: {
+      std::string prefix = basepath;
+      if (prefix.back() != '/') prefix += '/';
+
+      std::vector<std::pair<time_t, std::string>> withTimes;
+      withTimes.reserve(files.size());
+
+      for (const auto& name : files) {
+        time_t readTime = 0;
+        if (name.back() != '/') {
+          readTime = RECENT_BOOKS.getLastReadTime(prefix + name);
+        }
+        withTimes.emplace_back(readTime, name);
+      }
+
+      std::sort(withTimes.begin(), withTimes.end(), [](const std::pair<time_t, std::string>& a,
+                                                       const std::pair<time_t, std::string>& b) {
+        bool isDir_a = a.second.back() == '/';
+        bool isDir_b = b.second.back() == '/';
+        if (isDir_a != isDir_b) return isDir_a;
+        return a.first > b.first;
+      });
+
+      files.clear();
+      files.reserve(withTimes.size());
+      for (auto& entry : withTimes) files.push_back(std::move(entry.second));
+      break;
+    }
+  }
+  selectorIndex = 0;
+}
+
 void FileBrowserActivity::loadFiles() {
   files.clear();
 
@@ -101,7 +184,7 @@ void FileBrowserActivity::loadFiles() {
     file.close();
   }
   root.close();
-  sortFileList(files);
+  applySortMode();
 }
 
 void FileBrowserActivity::onEnter() {
@@ -201,26 +284,46 @@ void FileBrowserActivity::loop() {
     }
   }
 
-  int listSize = static_cast<int>(files.size());
-  buttonNavigator.onNextRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
+  // PageForward cycles to next sort mode
+  bool pageButtonPressed = false;
+  if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % SORT_MODE_COUNT);
+    applySortMode();
     requestUpdate();
-  });
+    pageButtonPressed = true;
+  }
 
-  buttonNavigator.onPreviousRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
+  // PageBack cycles to previous sort mode
+  if (mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + SORT_MODE_COUNT - 1) % SORT_MODE_COUNT);
+    applySortMode();
     requestUpdate();
-  });
+    pageButtonPressed = true;
+  }
 
-  buttonNavigator.onNextContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+  // Only handle list navigation if page buttons weren't pressed
+  if (!pageButtonPressed) {
+    int listSize = static_cast<int>(files.size());
+    buttonNavigator.onNextRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
 
-  buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+    buttonNavigator.onPreviousRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
+
+    buttonNavigator.onNextContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
+
+    buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
+  }
 }
 
 std::string getFileName(std::string filename) {
@@ -252,10 +355,12 @@ void FileBrowserActivity::render(RenderLock&&) {
         [this](int index) { return UITheme::getFileIcon(files[index]); });
   }
 
-  // Help text
+  // Help text — Left/Right cycle sort mode; show adjacent mode names as hints
+  const SortMode prevMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 2) % 3);
+  const SortMode nextMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 3);
   const auto labels =
       mappedInput.mapLabels(basepath == "/" ? tr(STR_HOME) : tr(STR_BACK), files.empty() ? "" : tr(STR_OPEN),
-                            files.empty() ? "" : tr(STR_DIR_UP), files.empty() ? "" : tr(STR_DIR_DOWN));
+                            getSortModeLabel(prevMode), getSortModeLabel(nextMode));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

@@ -111,9 +111,12 @@ void BaseTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const c
   constexpr int buttonWidth = 106;
   constexpr int buttonHeight = BaseMetrics::values.buttonHintsHeight;
   constexpr int buttonY = BaseMetrics::values.buttonHintsHeight;  // Distance from bottom
-  constexpr int textYOffset = 7;                                  // Distance from top of button to text baseline
   constexpr int buttonPositions[] = {25, 130, 245, 350};
   const char* labels[] = {btn1, btn2, btn3, btn4};
+
+  // Calculate vertical centering based on font height
+  const int fontHeight = renderer.getLineHeight(PULSR_10_FONT_ID);
+  const int textYOffset = (buttonHeight - fontHeight) / 2;  // Center text vertically (top of text)
 
   // Clear the entire button bar area first to prevent ghosting of previously drawn buttons
   renderer.fillRect(0, pageHeight - buttonY, renderer.getScreenWidth(), buttonHeight, false);

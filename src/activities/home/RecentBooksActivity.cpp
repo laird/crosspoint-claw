@@ -34,6 +34,55 @@ void RecentBooksActivity::loadRecentBooks() {
     if (FsHelpers::hasTxtExtension(name) || FsHelpers::hasMarkdownExtension(name)) continue;
     recentBooks.push_back(book);
   }
+  applySortMode();
+}
+
+const char* RecentBooksActivity::getSortModeLabel(SortMode mode) {
+  switch (mode) {
+    case SORT_UNREAD:
+      return tr(STR_SORT_UNREAD);
+    case SORT_READ:
+      return tr(STR_SORT_RECENT_READ);
+    case SORT_LOAD:
+      return tr(STR_SORT_DATE);
+    case SORT_ALPHABETICAL:
+      return tr(STR_SORT_NAME);
+    default:
+      return tr(STR_SORT_UNREAD);
+  }
+}
+
+void RecentBooksActivity::applySortMode() {
+  switch (currentSortMode) {
+    case SORT_UNREAD:
+      // Sort unread books first (lastReadTime == 0), then by load order
+      std::stable_sort(recentBooks.begin(), recentBooks.end(),
+                       [](const RecentBook& a, const RecentBook& b) {
+                         // Unread (0) sorts before read (>0)
+                         bool a_unread = (a.lastReadTime == 0);
+                         bool b_unread = (b.lastReadTime == 0);
+                         return a_unread > b_unread;  // true > false, so unread first
+                       });
+      break;
+
+    case SORT_READ:
+      // Sort by lastReadTime (newest first)
+      std::sort(recentBooks.begin(), recentBooks.end(),
+                [](const RecentBook& a, const RecentBook& b) { return a.lastReadTime > b.lastReadTime; });
+      break;
+
+    case SORT_LOAD:
+      // Sort by position in RecentBooksStore (insertion order = load order, newest first)
+      // Already in load order from loadRecentBooks(), but keep explicit for clarity
+      break;
+
+    case SORT_ALPHABETICAL:
+      // Sort alphabetically by title
+      std::sort(recentBooks.begin(), recentBooks.end(),
+                [](const RecentBook& a, const RecentBook& b) { return a.title < b.title; });
+      break;
+  }
+  selectorIndex = 0;  // Reset to top after sort
 }
 
 void RecentBooksActivity::onEnter() {
@@ -66,27 +115,47 @@ void RecentBooksActivity::loop() {
     onGoHome();
   }
 
+  // PageBack cycles to previous sort mode (UNREAD → LOAD → READ → ALPHABETICAL → UNREAD)
+  bool pageButtonPressed = false;
+  if (mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 3) % 4);
+    applySortMode();
+    requestUpdate();
+    pageButtonPressed = true;
+  }
+
+  // PageForward cycles to next sort mode (UNREAD → READ → LOAD → ALPHABETICAL → UNREAD)
+  if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
+    currentSortMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 4);
+    applySortMode();
+    requestUpdate();
+    pageButtonPressed = true;
+  }
+
   int listSize = static_cast<int>(recentBooks.size());
 
-  buttonNavigator.onNextRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
-    requestUpdate();
-  });
+  // Only handle list navigation if page buttons weren't pressed
+  if (!pageButtonPressed) {
+    buttonNavigator.onNextRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
 
-  buttonNavigator.onPreviousRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
-    requestUpdate();
-  });
+    buttonNavigator.onPreviousRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
 
-  buttonNavigator.onNextContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+    buttonNavigator.onNextContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
 
-  buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+    buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
+  }
 }
 
 void RecentBooksActivity::render(RenderLock&&) {
@@ -111,8 +180,11 @@ void RecentBooksActivity::render(RenderLock&&) {
         [this](int index) { return UITheme::getFileIcon(recentBooks[index].path); });
   }
 
-  // Help text
-  const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_OPEN), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+  // Help text — show sort mode labels on side buttons
+  const SortMode prevMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 3) % 4);
+  const SortMode nextMode = static_cast<SortMode>((static_cast<int>(currentSortMode) + 1) % 4);
+  const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_OPEN), getSortModeLabel(prevMode),
+                                            getSortModeLabel(nextMode));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
